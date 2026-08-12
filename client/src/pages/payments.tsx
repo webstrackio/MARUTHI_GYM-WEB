@@ -13,16 +13,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Receipt } from "lucide-react";
-import type { Student } from "@shared/schema";
+import { CreditCard, Receipt, MessageSquare, Copy } from "lucide-react";
+import type { Payment, Student } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useGymSettings } from "@/hooks/use-gym-settings";
+import { buildPaymentSms, buildSmsLink } from "@/lib/payment-sms";
 
 const formSchema = z.object({
   searchQuery: z.string(),
-  studentId: z.number().min(1, "Please select a student"),
+  studentId: z.number(),
   date: z.string().min(1, "Date is required"),
   duration: z.number().min(1, "Duration must be at least 1 day"),
   amount: z.number().min(1, "Amount must be greater than 0"),
@@ -31,13 +41,25 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+type SmsReceipt = {
+  studentName: string;
+  phone: string;
+  message: string;
+};
+
 export default function Payments() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [smsReceipt, setSmsReceipt] = useState<SmsReceipt | null>(null);
   const { toast } = useToast();
+  const { settings } = useGymSettings();
 
   const { data: students } = useQuery<Student[]>({
     queryKey: ["/api/students"],
+  });
+
+  const { data: payments } = useQuery<Payment[]>({
+    queryKey: ["/api/payments"],
   });
 
   const form = useForm<FormValues>({
@@ -52,19 +74,55 @@ export default function Payments() {
     },
   });
 
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+
   const filteredStudents = students?.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.registerNo.toLowerCase().includes(searchQuery.toLowerCase())
+    (s) => {
+      const q = normalize(searchQuery);
+      if (!q) return false;
+      return (
+        normalize(s.name).includes(q) ||
+        normalize(s.registerNo).includes(q)
+      );
+    }
   );
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (selectedStudent && value.trim() !== selectedStudent.name) {
+      setSelectedStudent(null);
+      form.setValue("studentId", 0);
+    }
+  };
 
   const paymentMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/payments", data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/students"] });
       queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
+
+      const student = students?.find((s) => s.id === variables.studentId);
+      const phone = student?.phone || variables.phone || "";
+
+      const endDate = getNewExpiryDate(
+        variables.date,
+        variables.duration,
+        student?.expiryDate ?? ""
+      );
+
+      const message = buildPaymentSms({
+        studentName: variables.studentName,
+        amount: variables.amount,
+        duration: variables.duration,
+        paymentMethod: variables.paymentMethod,
+        startDate: variables.date,
+        endDate: endDate,
+        gymName: settings.name,
+      });
+
+      setSmsReceipt({ studentName: variables.studentName, phone, message });
       toast({ title: "Payment recorded successfully" });
       setSelectedStudent(null);
       setSearchQuery("");
@@ -89,6 +147,13 @@ export default function Payments() {
     setSearchQuery(student.name);
   };
 
+  const latestTokenNumber = selectedStudent
+    ? [...(payments ?? [])]
+        .filter((p) => p.studentId === selectedStudent.id)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+        ?.tokenNumber
+    : undefined;
+
   const getNewExpiryDate = (paymentDate: string, duration: number, currentExpiry: string) => {
     const baseDate = new Date(currentExpiry) > new Date(paymentDate) ? new Date(currentExpiry) : new Date(paymentDate);
     const newDate = new Date(baseDate);
@@ -107,6 +172,7 @@ export default function Payments() {
       studentId: selectedStudent.id,
       registerNo: selectedStudent.registerNo,
       studentName: selectedStudent.name,
+      phone: selectedStudent.phone,
       duration: data.duration,
       amount: data.amount,
       paymentMethod: data.paymentMethod,
@@ -138,7 +204,7 @@ export default function Payments() {
                     id="search-student"
                     placeholder="Search by name or register number..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => handleSearchChange(e.target.value.replace(/[^A-Za-z0-9 .'-]/g, ""))}
                     data-testid="input-search-student"
                   />
                   {searchQuery && filteredStudents && filteredStudents.length > 0 && (
@@ -156,6 +222,11 @@ export default function Payments() {
                         </button>
                       ))}
                     </div>
+                  )}
+                  {searchQuery.trim() && filteredStudents && filteredStudents.length === 0 && (
+                    <p className="mt-2 text-sm text-muted-foreground" data-testid="search-no-results">
+                      No matching students found
+                    </p>
                   )}
                 </div>
 
@@ -242,7 +313,7 @@ export default function Payments() {
                 <Button
                   type="submit"
                   className="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white h-11"
-                  disabled={!selectedStudent || paymentMutation.isPending}
+                  disabled={paymentMutation.isPending}
                   data-testid="button-record-payment"
                 >
                   {paymentMutation.isPending ? "Recording..." : "$  Record Payment"}
@@ -265,7 +336,9 @@ export default function Payments() {
               <div className="space-y-3">
                 <div className="p-3 bg-muted rounded-md">
                   <p className="text-xs text-muted-foreground">Token Number</p>
-                  <p className="text-2xl font-bold text-orange-600 dark:text-orange-500">#-</p>
+                  <p className="text-2xl font-bold text-orange-600 dark:text-orange-500">
+                    {latestTokenNumber ?? "Not Paid Yet"}
+                  </p>
                 </div>
 
                 <div className="p-3 bg-muted rounded-md">
@@ -310,6 +383,61 @@ export default function Payments() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={smsReceipt !== null} onOpenChange={(open) => !open && setSmsReceipt(null)}>
+        <DialogContent className="max-w-lg" data-testid="dialog-sms-receipt">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-green-500" />
+              Payment Receipt SMS
+            </DialogTitle>
+            <DialogDescription>
+              Send this receipt as a normal SMS to {smsReceipt?.studentName}{" "}
+              {smsReceipt?.phone ? `(+91 ${smsReceipt.phone})` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {smsReceipt && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-gray-100 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800">
+                <pre className="whitespace-pre-wrap text-sm text-foreground font-sans">
+                  {smsReceipt.message}
+                </pre>
+              </div>
+
+              <DialogFooter className="gap-2 sm:justify-start">
+                {smsReceipt.phone ? (
+                  <a
+                    href={buildSmsLink(smsReceipt.phone, smsReceipt.message)}
+                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 transition-all duration-150 hover-elevate active-elevate-2 min-h-9 px-4 py-2 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white"
+                    data-testid="button-send-sms"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Send SMS
+                  </a>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No mobile number on file for this student.
+                  </p>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(smsReceipt.message);
+                    toast({ title: "Message copied to clipboard" });
+                  }}
+                  data-testid="button-copy-sms"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy Message
+                </Button>
+                <Button variant="ghost" onClick={() => setSmsReceipt(null)} data-testid="button-close-sms">
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

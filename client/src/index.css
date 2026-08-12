@@ -176,6 +176,21 @@
 }
 
 /**
+ * Motion / Animation Timing Standards.
+ * Baseline: transition: all 200ms ease-in-out
+ * - Button hover ............ 150ms
+ * - Input / focus effect .... 150ms
+ * - Small icons ............. 150-200ms
+ * - Cards hover ............. 200ms
+ * - Dropdown / menu ......... 200ms
+ * - Modal open / close ...... 250ms  (duration-250)
+ * - Page / section entrance . 300-400ms
+ * - Large transitions ....... 400-500ms (duration-400 / duration-450)
+ * Use the Tailwind classes duration-150 / duration-200 / duration-250 /
+ * duration-300 / duration-400 / duration-450 / duration-500 to apply these.
+ */
+
+/**
  * Using the elevate system.
  * Automatic contrast adjustment.
  *
@@ -233,6 +248,7 @@
     border-radius: inherit;
     z-index: -1;
     /* sits behind content but above backdrop */
+    transition: background-color 200ms ease-in-out;
   }
 
   .toggle-elevate.toggle-elevated::before {
@@ -265,6 +281,7 @@
     border-radius: inherit;
     z-index: 999;
     /* sits in front of content */
+    transition: background-color 150ms ease-in-out;
   }
 
   .hover-elevate:hover:not(.no-default-hover-elevate)::after,

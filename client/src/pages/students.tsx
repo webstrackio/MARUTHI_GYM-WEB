@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Users, LogIn, AlertCircle, CheckCircle } from "lucide-react";
+import { Plus, Pencil, Users, LogIn, AlertCircle, CheckCircle, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Student } from "@shared/schema";
 import { useForm } from "react-hook-form";
@@ -32,10 +34,11 @@ import { insertStudentSchema } from "@shared/schema";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
-const formSchema = insertStudentSchema.omit({ expiryDate: true }).extend({
-  registerNo: z.string().min(1, "Register number is required"),
-  name: z.string().min(1, "Name is required"),
-  phone: z.string().min(10, "Valid phone number is required"),
+const formSchema = insertStudentSchema.omit({ expiryDate: true, registerNo: true }).extend({
+  registerNo: z.string().optional(),
+  name: z.string().min(1, "Name is required").regex(/^[A-Za-z][A-Za-z .'-]*$/, "Name must contain only letters"),
+  phone: z.string().regex(/^[0-9]{10}$/, "Phone number must be exactly 10 digits"),
+  address: z.string().min(1, "Address is required"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -51,10 +54,167 @@ type AttendanceFeedback = {
   };
 } | null;
 
+type MemberColumn =
+  | "Name"
+  | "Register No."
+  | "Phone"
+  | "Address"
+  | "Join Date"
+  | "Expiry Date"
+  | "Days Left"
+  | "Status"
+  | "Actions";
+
+function MemberCard({
+  title,
+  description,
+  students,
+  columns,
+  getStatus,
+  getDaysLeft,
+  canCheckIn,
+  onCheckIn,
+  onEdit,
+  isCheckInPending,
+  emptyText,
+}: {
+  title: string;
+  description: string;
+  students: Student[] | undefined;
+  columns: MemberColumn[];
+  getStatus: (expiryDate: string | null) => string;
+  getDaysLeft: (expiryDate: string | null) => number;
+  canCheckIn: (expiryDate: string | null) => boolean;
+  onCheckIn: (registerNo: string) => void;
+  onEdit: (student: Student) => void;
+  isCheckInPending: boolean;
+  emptyText: string;
+}) {
+  const renderCell = (column: MemberColumn, student: Student) => {
+    const status = getStatus(student.expiryDate);
+    switch (column) {
+      case "Name":
+        return <TableCell className="font-medium">{student.name}</TableCell>;
+      case "Register No.":
+        return <TableCell className="font-medium">{student.registerNo}</TableCell>;
+      case "Phone":
+        return <TableCell>{student.phone}</TableCell>;
+      case "Address":
+        return <TableCell>{student.address}</TableCell>;
+      case "Join Date":
+        return <TableCell>{new Date(student.joinDate).toLocaleDateString()}</TableCell>;
+      case "Expiry Date":
+        return (
+          <TableCell>
+            {student.expiryDate ? new Date(student.expiryDate).toLocaleDateString() : "-"}
+          </TableCell>
+        );
+      case "Days Left":
+        return (
+          <TableCell
+            className={
+              status === "Active"
+                ? "text-green-600 dark:text-green-400 font-medium"
+                : status === "Pay Required"
+                  ? "text-orange-600 dark:text-orange-400 font-medium"
+                  : "text-red-600 dark:text-red-400 font-medium"
+            }
+          >
+            Days: {getDaysLeft(student.expiryDate)}
+          </TableCell>
+        );
+      case "Status":
+        return (
+          <TableCell>
+            <Badge
+              variant={status === "Active" ? "default" : "destructive"}
+              className={
+                status === "Active"
+                  ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                  : status === "Pay Required"
+                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+              }
+              data-testid={`badge-status-${student.id}`}
+            >
+              {status}
+            </Badge>
+          </TableCell>
+        );
+      case "Actions":
+        return (
+          <TableCell className="text-right">
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onCheckIn(student.registerNo)}
+                disabled={isCheckInPending || !canCheckIn(student.expiryDate)}
+                title={!canCheckIn(student.expiryDate) ? "Payment required to check in" : "Check in student"}
+                data-testid={`button-attendance-${student.id}`}
+              >
+                <LogIn className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onEdit(student)}
+                data-testid={`button-edit-${student.id}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          </TableCell>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {students && students.length > 0 ? (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {columns.map((column) => (
+                    <TableHead key={column} className={column === "Actions" ? "text-right" : ""}>
+                      {column}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {students.map((student) => (
+                  <TableRow key={student.id} data-testid={`row-student-${student.id}`}>
+                    {columns.map((column) => (
+                      <Fragment key={column}>{renderCell(column, student)}</Fragment>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
+            <p>{emptyText}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Students() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [attendanceFeedback, setAttendanceFeedback] = useState<AttendanceFeedback>(null);
   const { toast } = useToast();
 
@@ -63,6 +223,16 @@ export default function Students() {
   });
 
   const students = studentsData ? [...studentsData].reverse() : undefined;
+
+  const [, navigate] = useLocation();
+  const search = useSearch();
+  const statusFilter = new URLSearchParams(search).get("status");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (statusFilter === "active") return "active";
+    if (statusFilter === "expired") return "expired";
+    return "all";
+  });
+  const [searchQuery, setSearchQuery] = useState("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -102,18 +272,6 @@ export default function Students() {
     },
     onError: () => {
       toast({ title: "Failed to update student", variant: "destructive" });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/students/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/students"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({ title: "Student deleted successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to delete student", variant: "destructive" });
     },
   });
 
@@ -167,7 +325,7 @@ export default function Students() {
     },
   });
 
-  const handleOpenDialog = (student?: Student) => {
+  const handleOpenDialog = async (student?: Student) => {
     if (student) {
       setEditingStudent(student);
       form.reset({
@@ -186,6 +344,13 @@ export default function Students() {
         address: "",
         joinDate: new Date().toISOString().split("T")[0],
       });
+      try {
+        const res = await apiRequest("GET", "/api/students/next-register-no");
+        const data = await res.json();
+        form.setValue("registerNo", data.nextRegisterNo);
+      } catch {
+        // Backend will still auto-generate the register number on submit
+      }
     }
     setIsDialogOpen(true);
   };
@@ -221,6 +386,22 @@ export default function Students() {
     return daysLeft > 0;
   };
 
+  const searchLower = searchQuery.trim().toLowerCase();
+  const filteredStudents = students?.filter((s) => {
+    if (!searchLower) return true;
+    return (
+      s.name.toLowerCase().includes(searchLower) ||
+      s.registerNo.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const allStudents = filteredStudents;
+  const activeStudents = filteredStudents?.filter((s) => getStatus(s.expiryDate) === "Active");
+  const expiredStudents = filteredStudents?.filter((s) => {
+    const status = getStatus(s.expiryDate);
+    return status === "Expired" || status === "Pay Required";
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -228,104 +409,120 @@ export default function Students() {
           <h1 className="text-2xl font-semibold text-foreground">Students</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage gym members</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} data-testid="button-add-student">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Student
-        </Button>
+        <div className="flex items-center gap-2">
+          {statusFilter && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setActiveTab("all");
+                navigate("/students");
+              }}
+              data-testid="button-show-all-students"
+            >
+              Show All
+            </Button>
+          )}
+          <Button onClick={() => handleOpenDialog()} data-testid="button-add-student">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Student
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Members List</CardTitle>
-          <CardDescription>View and manage all gym members</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : students && students.length > 0 ? (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Register No.</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Address</TableHead>
-                    <TableHead>Join Date</TableHead>
-                    <TableHead>Expiry Date</TableHead>
-                    <TableHead>Days Left</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {students.map((student) => (
-                    <TableRow key={student.id} data-testid={`row-student-${student.id}`}>
-                      <TableCell className="font-medium">{student.registerNo}</TableCell>
-                      <TableCell>{student.name}</TableCell>
-                      <TableCell>{student.phone}</TableCell>
-                      <TableCell>{student.address}</TableCell>
-                      <TableCell>{new Date(student.joinDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{student.expiryDate ? new Date(student.expiryDate).toLocaleDateString() : "-"}</TableCell>
-                      <TableCell className={getStatus(student.expiryDate) === "Active" ? "text-green-600 dark:text-green-400 font-medium" : getStatus(student.expiryDate) === "Pay Required" ? "text-orange-600 dark:text-orange-400 font-medium" : "text-red-600 dark:text-red-400 font-medium"}>
-                        Days: {getDaysLeft(student.expiryDate)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={getStatus(student.expiryDate) === "Active" ? "default" : "destructive"}
-                          className={getStatus(student.expiryDate) === "Active" ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : getStatus(student.expiryDate) === "Pay Required" ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400" : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"}
-                          data-testid={`badge-status-${student.id}`}
-                        >
-                          {getStatus(student.expiryDate)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => attendanceMutation.mutate(student.registerNo)}
-                            disabled={attendanceMutation.isPending || !canCheckIn(student.expiryDate)}
-                            title={!canCheckIn(student.expiryDate) ? "Payment required to check in" : "Check in student"}
-                            data-testid={`button-attendance-${student.id}`}
-                          >
-                            <LogIn className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(student)}
-                            data-testid={`button-edit-${student.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteConfirmId(student.id)}
-                            data-testid={`button-delete-${student.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>No students found. Add your first member to get started.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search members by name or register number..."
+          className="pl-10"
+          data-testid="input-search-students"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="inline-flex h-auto w-auto gap-1 rounded-full border bg-muted p-1">
+              <TabsTrigger
+                value="all"
+                data-testid="tab-students-all"
+                className="rounded-full px-3 py-1 text-sm"
+              >
+                All
+              </TabsTrigger>
+              <TabsTrigger
+                value="active"
+                data-testid="tab-students-active"
+                className="rounded-full px-3 py-1 text-sm"
+              >
+                Active
+              </TabsTrigger>
+              <TabsTrigger
+                value="expired"
+                data-testid="tab-students-expired"
+                className="rounded-full px-3 py-1 text-sm"
+              >
+                Expired
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="all" className="mt-4">
+              <MemberCard
+                title="All Members"
+                description={`${allStudents?.length ?? 0} total member(s)`}
+                students={allStudents}
+                columns={["Register No.", "Name", "Address", "Phone", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]}
+                getStatus={getStatus}
+                getDaysLeft={getDaysLeft}
+                canCheckIn={canCheckIn}
+                onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)}
+                onEdit={handleOpenDialog}
+                isCheckInPending={attendanceMutation.isPending}
+                emptyText="No members found. Add your first member to get started."
+              />
+            </TabsContent>
+
+            <TabsContent value="active" className="mt-4">
+              <MemberCard
+                title="Active Members"
+                description={`${activeStudents?.length ?? 0} active member(s)`}
+                students={activeStudents}
+                columns={["Register No.", "Name", "Phone", "Address", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]}
+                getStatus={getStatus}
+                getDaysLeft={getDaysLeft}
+                canCheckIn={canCheckIn}
+                onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)}
+                onEdit={handleOpenDialog}
+                isCheckInPending={attendanceMutation.isPending}
+                emptyText="No active members right now."
+              />
+            </TabsContent>
+
+            <TabsContent value="expired" className="mt-4">
+              <MemberCard
+                title="Expired Members"
+                description={`${expiredStudents?.length ?? 0} expired / unpaid member(s)`}
+                students={expiredStudents}
+                columns={["Register No.", "Name", "Phone", "Address", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]}
+                getStatus={getStatus}
+                getDaysLeft={getDaysLeft}
+                canCheckIn={canCheckIn}
+                onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)}
+                onEdit={handleOpenDialog}
+                isCheckInPending={attendanceMutation.isPending}
+                emptyText="No expired or unpaid members."
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent data-testid="dialog-student-form">
@@ -344,8 +541,15 @@ export default function Students() {
                   <FormItem>
                     <FormLabel>Register Number <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-register-no" />
+                      <Input
+                        {...field}
+                        disabled
+                        readOnly
+                        placeholder="Auto-generated"
+                        data-testid="input-register-no"
+                      />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground">Auto-generated by the system. Cannot be edited.</p>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -357,7 +561,13 @@ export default function Students() {
                   <FormItem>
                     <FormLabel>Full Name <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-name" />
+                      <Input
+                        {...field}
+                        maxLength={50}
+                        placeholder="Enter full name"
+                        onChange={(e) => field.onChange(e.target.value.replace(/[^A-Za-z .'-]/g, ""))}
+                        data-testid="input-name"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -370,7 +580,14 @@ export default function Students() {
                   <FormItem>
                     <FormLabel>Phone <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-phone" />
+                      <Input
+                        {...field}
+                        inputMode="numeric"
+                        maxLength={10}
+                        placeholder="10 digit mobile number"
+                        onChange={(e) => field.onChange(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
+                        data-testid="input-phone"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -381,7 +598,7 @@ export default function Students() {
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel>Address <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
                       <Input placeholder="Enter address" {...field} data-testid="input-address" />
                     </FormControl>
@@ -409,33 +626,6 @@ export default function Students() {
               </DialogFooter>
             </form>
           </Form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deleteConfirmId !== null} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
-        <DialogContent data-testid="dialog-delete-confirm">
-          <DialogHeader>
-            <DialogTitle>Confirm Delete</DialogTitle>
-            <DialogDescription>Are you sure you want to delete this student? This action cannot be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteConfirmId(null)} data-testid="button-cancel-delete">
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (deleteConfirmId !== null) {
-                  deleteMutation.mutate(deleteConfirmId);
-                  setDeleteConfirmId(null);
-                }
-              }}
-              disabled={deleteMutation.isPending}
-              data-testid="button-confirm-delete"
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

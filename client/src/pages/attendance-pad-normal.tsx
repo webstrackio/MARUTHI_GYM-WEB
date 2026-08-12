@@ -243,9 +243,17 @@ export default function AttendancePad() {
           <Input
             id="register-input"
             type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             placeholder="Enter register number..."
             value={registerNumber}
-            onChange={(e) => setRegisterNumber(e.target.value.toUpperCase())}
+            onChange={(e) => setRegisterNumber(e.target.value.replace(/\D/g, ""))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (!loading) handleSubmit();
+              }
+            }}
             className="text-center text-2xl font-bold h-16"
             data-testid="input-register-number"
             autoFocus

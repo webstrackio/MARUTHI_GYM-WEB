@@ -19,6 +19,10 @@ export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
   createdAt: true,
   expiryDate: true,
+}).extend({
+  name: z.string().min(1, "Name is required").regex(/^[A-Za-z][A-Za-z .'-]*$/, "Name must contain only letters"),
+  phone: z.string().regex(/^[0-9]{10}$/, "Phone number must be exactly 10 digits"),
+  address: z.string().min(1, "Address is required"),
 });
 
 export type InsertStudent = z.infer<typeof insertStudentSchema>;

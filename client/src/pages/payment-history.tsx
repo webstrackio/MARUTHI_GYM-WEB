@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -139,8 +140,14 @@ export default function PaymentHistory() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPayments.map((payment) => (
-                    <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
+                  {filteredPayments.map((payment, index) => (
+                    <motion.tr
+                      key={payment.id}
+                      initial={{ opacity: 0, x: -16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index * 0.04, 0.24) }}
+                      data-testid={`row-payment-${payment.id}`}
+                    >
                       <TableCell className="font-medium">{payment.tokenNumber}</TableCell>
                       <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
                       <TableCell>{payment.registerNo}</TableCell>
@@ -167,7 +174,7 @@ export default function PaymentHistory() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">₹ {payment.amount}</TableCell>
-                    </TableRow>
+                    </motion.tr>
                   ))}
                 </TableBody>
               </Table>

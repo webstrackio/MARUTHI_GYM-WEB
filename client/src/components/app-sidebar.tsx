@@ -17,7 +17,6 @@ import {
   TrendingUp,
   History,
   Calendar,
-  Fingerprint,
   LogOut,
   Moon,
   Sun,
@@ -28,6 +27,7 @@ import { Dumbbell } from "lucide-react";
 import { useTheme } from "./theme-provider";
 import { Button } from "./ui/button";
 import { useGymSettings } from "@/hooks/use-gym-settings";
+import { logout } from "@/lib/auth";
 
 const menuItems = [
   {
@@ -46,9 +46,9 @@ const menuItems = [
     icon: DollarSign,
   },
   {
-    title: "Income Dashboard",
-    url: "/income-dashboard",
-    icon: TrendingUp,
+    title: "Attendance History",
+    url: "/attendance-history",
+    icon: Calendar,
   },
   {
     title: "Payment History",
@@ -61,14 +61,9 @@ const menuItems = [
     icon: Edit,
   },
   {
-    title: "Attendance History",
-    url: "/attendance-history",
-    icon: Calendar,
-  },
-  {
-    title: "Attendance Pad",
-    url: "/attendance-pad",
-    icon: Fingerprint,
+    title: "Income Dashboard",
+    url: "/income-dashboard",
+    icon: TrendingUp,
   },
   {
     title: "Settings",
@@ -85,7 +80,12 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-6 border-b">
-        <div className="flex items-center gap-3">
+        <Link
+          href="/admin"
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-150"
+          data-testid="link-admin"
+          title="Open owner admin page"
+        >
           <div
             className="flex h-10 w-10 items-center justify-center rounded-md text-xl flex-shrink-0 overflow-hidden"
             style={{ backgroundColor: settings.accentColor }}
@@ -107,7 +107,7 @@ export function AppSidebar() {
             </h1>
             <p className="text-xs text-muted-foreground">Management System</p>
           </div>
-        </div>
+        </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -118,7 +118,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location === item.url}
-                    className={`!h-auto px-4 py-3 rounded-none border-l-4 border-transparent data-[active=true]:bg-red-50 dark:data-[active=true]:bg-red-950/30 data-[active=true]:border-l-red-500 data-[active=true]:text-red-600 dark:data-[active=true]:text-red-400`}
+                    className={`!h-auto px-4 py-3 rounded-none border-l-4 border-transparent transition-all duration-200 ease-in-out hover:translate-x-0.5 hover:bg-red-50 dark:hover:bg-red-950/30 hover:border-l-red-500 hover:text-red-600 dark:hover:text-red-400 data-[active=true]:bg-red-50 dark:data-[active=true]:bg-red-950/30 data-[active=true]:border-l-red-500 data-[active=true]:text-red-600 dark:data-[active=true]:text-red-400`}
                     data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
                   >
                     <Link
@@ -159,6 +159,7 @@ export function AppSidebar() {
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 h-auto px-4 py-3"
+          onClick={() => logout()}
           data-testid="button-logout"
         >
           <LogOut className="h-5 w-5 flex-shrink-0" />

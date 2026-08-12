@@ -22,6 +22,7 @@ export interface IStorage {
   getStudents(): Promise<Student[]>;
   getStudentById(id: number): Promise<Student | undefined>;
   getStudentByRegisterNo(registerNo: string): Promise<Student | undefined>;
+  getNextRegisterNo(): Promise<string>;
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: number, student: Partial<InsertStudent>): Promise<Student>;
   deleteStudent(id: number): Promise<void>;
@@ -77,6 +78,15 @@ export class DrizzleStorage implements IStorage {
   async getStudentByRegisterNo(registerNo: string): Promise<Student | undefined> {
     const result = await db.select().from(students).where(eq(students.registerNo, registerNo));
     return result[0];
+  }
+
+  async getNextRegisterNo(): Promise<string> {
+    const allStudents = await db.select().from(students);
+    const maxRegisterNo = allStudents.reduce((max, s) => {
+      const num = Number(s.registerNo);
+      return Number.isInteger(num) && num >= 0 ? Math.max(max, num) : max;
+    }, 0);
+    return String(maxRegisterNo + 1);
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {

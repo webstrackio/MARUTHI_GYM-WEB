@@ -87,6 +87,11 @@ export default {
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
       },
+      transitionDuration: {
+        250: "250ms",
+        400: "400ms",
+        450: "450ms",
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },

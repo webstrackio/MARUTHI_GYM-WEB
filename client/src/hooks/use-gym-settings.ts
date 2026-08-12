@@ -7,6 +7,8 @@ export interface GymSettings {
   heroImage: string; // base64 encoded image
   accentColor: string;
   cropScale: number;
+  ownerEmail: string;
+  ownerPassword: string;
 }
 
 const DEFAULT_SETTINGS: GymSettings = {
@@ -16,6 +18,8 @@ const DEFAULT_SETTINGS: GymSettings = {
   heroImage: "",
   accentColor: "#3b82f6",
   cropScale: 1,
+  ownerEmail: "",
+  ownerPassword: "",
 };
 
 const STORAGE_KEY = "gymdesk_settings";

@@ -24,6 +24,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/students/next-register-no", async (_req, res) => {
+    try {
+      const nextRegisterNo = await storage.getNextRegisterNo();
+      res.json({ nextRegisterNo });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch next register number" });
+    }
+  });
+
   app.get("/api/students/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -39,13 +48,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/students", async (req, res) => {
     try {
-      const validatedData = insertStudentSchema.parse(req.body);
-      
-      // Check if register number already exists
-      const existing = await storage.getStudentByRegisterNo(validatedData.registerNo);
-      if (existing) {
-        return res.status(400).json({ error: "Register number already exists" });
+      // Register number is generated automatically from the backend to
+      // guarantee it is numeric, sequential and unique.
+      let registerNo = await storage.getNextRegisterNo();
+      let existing = await storage.getStudentByRegisterNo(registerNo);
+      while (existing) {
+        registerNo = String(Number(registerNo) + 1);
+        existing = await storage.getStudentByRegisterNo(registerNo);
       }
+
+      if (!/^\d+$/.test(registerNo)) {
+        return res.status(400).json({ error: "Register number must contain numbers only" });
+      }
+
+      const validatedData = insertStudentSchema.parse({
+        ...req.body,
+        registerNo,
+      });
 
       const student = await storage.createStudent(validatedData);
       res.status(201).json(student);
@@ -105,17 +124,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tokenNumber,
       });
       const payment = await storage.createPayment(validatedData);
-      
-      // Update student's expiry date based on payment duration
-      const today = new Date();
-      const expiryDate = new Date(today);
+
+      // Update student's expiry date based on payment duration.
+      // Start from the later of the current expiry or the payment date,
+      // so renewing while active extends the membership correctly.
+      const student = await storage.getStudentById(validatedData.studentId);
+      if (!student) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+
+      const baseDate =
+        student.expiryDate && new Date(student.expiryDate) > new Date(validatedData.date)
+          ? new Date(student.expiryDate)
+          : new Date(validatedData.date);
+      const expiryDate = new Date(baseDate);
       expiryDate.setDate(expiryDate.getDate() + validatedData.duration);
-      
-      // Update student with new expiry date
+
       await storage.updateStudent(validatedData.studentId, {
         expiryDate: expiryDate.toISOString().split("T")[0],
       });
-      
+
       res.status(201).json(payment);
     } catch (error: any) {
       if (error.name === "ZodError") {

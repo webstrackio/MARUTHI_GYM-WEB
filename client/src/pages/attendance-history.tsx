@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,7 +143,7 @@ export default function AttendanceHistory() {
               <Input
                 placeholder="Enter register number..."
                 value={searchRegister}
-                onChange={(e) => setSearchRegister(e.target.value)}
+                onChange={(e) => setSearchRegister(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
                 data-testid="input-search-register"
               />
             </div>
@@ -166,13 +167,19 @@ export default function AttendanceHistory() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRecords.map((record) => (
-                    <TableRow key={record.id} data-testid={`row-attendance-${record.id}`}>
+                  {filteredRecords.map((record, index) => (
+                    <motion.tr
+                      key={record.id}
+                      initial={{ opacity: 0, x: -16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index * 0.04, 0.24) }}
+                      data-testid={`row-attendance-${record.id}`}
+                    >
                       <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
                       <TableCell className="font-medium">{record.registerNo}</TableCell>
                       <TableCell>{record.studentName}</TableCell>
                       <TableCell>{formatTime(record.timeIn)}</TableCell>
-                    </TableRow>
+                    </motion.tr>
                   ))}
                 </TableBody>
               </Table>

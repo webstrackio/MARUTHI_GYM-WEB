@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Wallet, CreditCard, TrendingUp, Calendar, DollarSign } from "lucide-react";
@@ -36,112 +37,152 @@ export default function IncomeDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <div>
-              <CardTitle className="text-sm font-medium text-green-800 dark:text-green-200 flex items-center gap-2">
-                <Wallet className="h-4 w-4" />
-                Cash in Hand
-              </CardTitle>
-              <p className="text-xs text-green-600 dark:text-green-400 mt-1">Total cash payments</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-32" />
-            ) : (
-              <p className="text-3xl font-bold text-green-900 dark:text-green-100" data-testid="text-cash-in-hand">
-                ₹ {stats?.cashInHand ?? 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <motion.div
+          whileHover={{
+            scale: [1, 1.06, 1],
+            y: [0, -6, 0],
+            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
+          }}
+        >
+          <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-sm font-medium text-green-800 dark:text-green-200 flex items-center gap-2">
+                  <Wallet className="h-4 w-4" />
+                  Cash in Hand
+                </CardTitle>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">Total cash payments</p>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-10 w-32" />
+              ) : (
+                <p className="text-3xl font-bold text-green-900 dark:text-green-100" data-testid="text-cash-in-hand">
+                  ₹ {stats?.cashInHand ?? 0}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <div>
-              <CardTitle className="text-sm font-medium text-blue-800 dark:text-blue-200 flex items-center gap-2">
-                <CreditCard className="h-4 w-4" />
-                Online Payments
-              </CardTitle>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Total online payments</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-32" />
-            ) : (
-              <p className="text-3xl font-bold text-blue-900 dark:text-blue-100" data-testid="text-online-payments">
-                ₹ {stats?.onlinePayments ?? 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <motion.div
+          whileHover={{
+            scale: [1, 1.06, 1],
+            y: [0, -6, 0],
+            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
+          }}
+        >
+          <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-sm font-medium text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Online Payments
+                </CardTitle>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Total online payments</p>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-10 w-32" />
+              ) : (
+                <p className="text-3xl font-bold text-blue-900 dark:text-blue-100" data-testid="text-online-payments">
+                  ₹ {stats?.onlinePayments ?? 0}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <div>
-              <CardTitle className="text-sm font-medium text-orange-800 dark:text-orange-200 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                This Month Income
-              </CardTitle>
-              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">{currentMonth} {currentYear}</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-32" />
-            ) : (
-              <p className="text-3xl font-bold text-orange-900 dark:text-orange-100" data-testid="text-this-month-income">
-                ₹ {stats?.thisMonthIncome ?? 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <motion.div
+          whileHover={{
+            scale: [1, 1.06, 1],
+            y: [0, -6, 0],
+            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
+          }}
+        >
+          <Card className="bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-sm font-medium text-orange-800 dark:text-orange-200 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  This Month Income
+                </CardTitle>
+                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">{currentMonth} {currentYear}</p>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-10 w-32" />
+              ) : (
+                <p className="text-3xl font-bold text-orange-900 dark:text-orange-100" data-testid="text-this-month-income">
+                  ₹ {stats?.thisMonthIncome ?? 0}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <div>
-              <CardTitle className="text-sm font-medium text-blue-800 dark:text-blue-200 flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                This Year Income
-              </CardTitle>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{currentYear}</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-32" />
-            ) : (
-              <p className="text-3xl font-bold text-blue-900 dark:text-blue-100" data-testid="text-this-year-income">
-                ₹ {stats?.thisYearIncome ?? 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <motion.div
+          whileHover={{
+            scale: [1, 1.06, 1],
+            y: [0, -6, 0],
+            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
+          }}
+        >
+          <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-sm font-medium text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  This Year Income
+                </CardTitle>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{currentYear}</p>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-10 w-32" />
+              ) : (
+                <p className="text-3xl font-bold text-blue-900 dark:text-blue-100" data-testid="text-this-year-income">
+                  ₹ {stats?.thisYearIncome ?? 0}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <div>
-              <CardTitle className="text-sm font-medium text-green-800 dark:text-green-200 flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Total Overall Income
-              </CardTitle>
-              <p className="text-xs text-green-600 dark:text-green-400 mt-1">All time earnings</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-32" />
-            ) : (
-              <p className="text-3xl font-bold text-green-900 dark:text-green-100" data-testid="text-total-overall-income">
-                ₹ {stats?.totalOverallIncome ?? 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <motion.div
+          whileHover={{
+            scale: [1, 1.06, 1],
+            y: [0, -6, 0],
+            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
+          }}
+        >
+          <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-sm font-medium text-green-800 dark:text-green-200 flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Total Overall Income
+                </CardTitle>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">All time earnings</p>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-10 w-32" />
+              ) : (
+                <p className="text-3xl font-bold text-green-900 dark:text-green-100" data-testid="text-total-overall-income">
+                  ₹ {stats?.totalOverallIncome ?? 0}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       <Card>
@@ -178,39 +219,55 @@ export default function IncomeDashboard() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-          <CardHeader>
-            <CardTitle className="text-black dark:text-white">Average Monthly Income</CardTitle>
-            <CardDescription>Based on {currentYear} data</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-32" />
-            ) : (
-              <p className="text-3xl font-bold text-black dark:text-white flex items-center gap-1" data-testid="text-avg-monthly-income">
-                <span className="text-green-600">₹</span>
-                {stats?.averageMonthlyIncome ?? 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <motion.div
+          whileHover={{
+            scale: [1, 1.06, 1],
+            y: [0, -6, 0],
+            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
+          }}
+        >
+          <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+            <CardHeader>
+              <CardTitle className="text-black dark:text-white">Average Monthly Income</CardTitle>
+              <CardDescription>Based on {currentYear} data</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-10 w-32" />
+              ) : (
+                <p className="text-3xl font-bold text-black dark:text-white flex items-center gap-1" data-testid="text-avg-monthly-income">
+                  <span className="text-green-600">₹</span>
+                  {stats?.averageMonthlyIncome ?? 0}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-          <CardHeader>
-            <CardTitle className="text-black dark:text-white">Total Payments Received</CardTitle>
-            <CardDescription>All time payment count</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-32" />
-            ) : (
-              <p className="text-3xl font-bold text-black dark:text-white flex items-center gap-1" data-testid="text-total-payments">
-                <span className="text-blue-600 dark:text-blue-400">$</span>
-                {stats?.totalPaymentsReceived ?? 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <motion.div
+          whileHover={{
+            scale: [1, 1.06, 1],
+            y: [0, -6, 0],
+            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
+          }}
+        >
+          <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+            <CardHeader>
+              <CardTitle className="text-black dark:text-white">Total Payments Received</CardTitle>
+              <CardDescription>All time payment count</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-10 w-32" />
+              ) : (
+                <p className="text-3xl font-bold text-black dark:text-white flex items-center gap-1" data-testid="text-total-payments">
+                  <span className="text-blue-600 dark:text-blue-400">$</span>
+                  {stats?.totalPaymentsReceived ?? 0}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, X, Upload } from "lucide-react";
+import { AlertCircle, X, Upload, Eye, EyeOff } from "lucide-react";
 
 const ICON_STYLES = [
   { name: "Red", bg: "bg-red-500", icon: "🏋️", color: "#ef4444" },
@@ -19,7 +19,7 @@ const ICON_STYLES = [
 ];
 
 export default function GymSettings() {
-  const { settings, updateSettings } = useGymSettings();
+  const { settings, updateSettings, isLoaded } = useGymSettings();
   const { toast } = useToast();
   const [gymName, setGymName] = useState(settings.name);
   const [selectedStyle, setSelectedStyle] = useState(0);
@@ -27,7 +27,25 @@ export default function GymSettings() {
   const [imageType, setImageType] = useState<"icon" | "custom">(settings.logoImage && settings.logoImage.startsWith("data:") ? "custom" : "icon");
   const [cropScale, setCropScale] = useState(1);
   const [primaryColor, setPrimaryColor] = useState(settings.accentColor);
+  const [ownerEmail, setOwnerEmail] = useState(settings.ownerEmail || "");
+  const [ownerPassword, setOwnerPassword] = useState(settings.ownerPassword || "");
+  const [showOwnerPassword, setShowOwnerPassword] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isLoaded) {
+      setGymName(settings.name);
+      setGymImage(settings.logoImage || "");
+      setImageType(
+        settings.logoImage && settings.logoImage.startsWith("data:") ? "custom" : "icon"
+      );
+      setCropScale(settings.cropScale || 1);
+      setPrimaryColor(settings.accentColor);
+      setOwnerEmail(settings.ownerEmail || "");
+      setOwnerPassword(settings.ownerPassword || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -81,6 +99,8 @@ export default function GymSettings() {
       accentColor: primaryColor,
       logoImage: gymImage,
       cropScale: cropScale,
+      ownerEmail: ownerEmail,
+      ownerPassword: ownerPassword,
     });
     toast({
       title: "Settings saved!",
@@ -127,7 +147,7 @@ export default function GymSettings() {
                 {/* File Input */}
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors"
+                  className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 text-center cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors duration-150"
                   data-testid="dropzone-image-upload"
                 >
                   <input
@@ -158,7 +178,7 @@ export default function GymSettings() {
                         size="sm"
                         variant="destructive"
                         onClick={handleRemoveImage}
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                         data-testid="button-remove-image"
                       >
                         <X className="w-4 h-4" />
@@ -194,7 +214,7 @@ export default function GymSettings() {
                     <button
                       key={index}
                       onClick={() => handleSelectIcon(index)}
-                      className={`p-4 rounded-lg text-white font-semibold text-lg transition-all border-2 ${
+                      className={`p-4 rounded-lg text-white font-semibold text-lg transition-all duration-200 border-2 ${
                         selectedStyle === index && !gymImage
                           ? "border-slate-900 dark:border-slate-100 ring-2 ring-slate-900 dark:ring-slate-100"
                           : "border-transparent hover:opacity-80"
@@ -242,6 +262,73 @@ export default function GymSettings() {
               <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-blue-700 dark:text-blue-300">
                 After saving, the page will reload to apply your changes throughout the entire application.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Owner Info Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Owner Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <p className="text-sm text-muted-foreground">
+              These details are used to log in to the admin page. Clicking the gym name in the
+              sidebar opens the owner login page.
+            </p>
+
+            {/* Owner Email */}
+            <div className="space-y-2">
+              <Label htmlFor="owner-email">
+                Owner Email <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="owner-email"
+                type="email"
+                value={ownerEmail}
+                onChange={(e) => setOwnerEmail(e.target.value)}
+                placeholder="e.g., owner@gym.com"
+                data-testid="input-owner-email"
+              />
+            </div>
+
+            {/* Owner Password */}
+            <div className="space-y-2">
+              <Label htmlFor="owner-password">
+                Owner Password <span className="text-red-500">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="owner-password"
+                  type={showOwnerPassword ? "text" : "password"}
+                  value={ownerPassword}
+                  onChange={(e) => setOwnerPassword(e.target.value)}
+                  placeholder="Enter a login password"
+                  data-testid="input-owner-password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOwnerPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                  aria-label={showOwnerPassword ? "Hide password" : "Show password"}
+                  data-testid="toggle-owner-password"
+                >
+                  {showOwnerPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex gap-2">
+              <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                The admin login at <strong>/admin</strong> is verified using the email and password
+                saved here. Save the settings above to apply these details.
               </p>
             </div>
           </CardContent>
