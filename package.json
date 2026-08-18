@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development node server/index.js",
     "build": "vite build --config client/vite.config.js && esbuild server/index.js --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "vercel-build": "vite build --config client/vite.config.js",
     "start": "cross-env NODE_ENV=production node dist/index.js",
-    "db:push": "drizzle-kit push --config=server/drizzle.config.js"
+    "db:push": "drizzle-kit push --config server/drizzle.config.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
