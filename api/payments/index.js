@@ -1,4 +1,4 @@
-import { storage } from "../_lib/storage.js";
+import { storage } from "../../server/lib/storage.js";
 import { insertPaymentSchema } from "../../shared/schema.js";
 
 export default async function handler(req, res) {
