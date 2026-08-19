@@ -1,10 +1,14 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+const { Pool } = pg;
 import { eq, sql } from "drizzle-orm";
 import { students, payments, attendance } from "../../shared/schema.js";
 
-const sql2 = neon(process.env.DATABASE_URL);
-const db = drizzle(sql2);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+const db = drizzle(pool);
 
 export class DrizzleStorage {
   async getStudents() {
