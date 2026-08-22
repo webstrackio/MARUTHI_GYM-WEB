@@ -1,14 +1,10 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
-const { Pool } = pg;
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { eq, sql } from "drizzle-orm";
 import { students, payments, attendance } from "../../shared/schema.js";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
-const db = drizzle(pool);
+const client = postgres(process.env.DATABASE_URL, { ssl: { rejectUnauthorized: false } });
+const db = drizzle(client);
 
 export class DrizzleStorage {
   async getStudents() {

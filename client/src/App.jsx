@@ -28,13 +28,17 @@ function Router() {
     if (role === "student") {
         return location === "/attendance-pad" ? (<AttendancePad />) : (<Redirect to="/attendance-pad"/>);
     }
-    // Not logged in: force the login page (settings stays open to configure owner details)
+    // Not logged in: only the login page (and settings for first-time setup), rendered full-screen without any navigation
     if (role === null) {
-        if (location === "/admin")
+        if (location === "/login" || location === "/admin")
             return <Admin />;
         if (location === "/settings")
             return <GymSettings />;
-        return <Redirect to="/admin"/>;
+        return <Redirect to="/login"/>;
+    }
+    // Already logged in: the login page has nothing to offer
+    if (location === "/login" || location === "/admin") {
+        return <Redirect to="/"/>;
     }
     if (location === "/attendance-pad") {
         return (<Switch>
@@ -42,7 +46,7 @@ function Router() {
         <Route component={NotFound}/>
       </Switch>);
     }
-    const noAnimation = ["/settings", "/income-dashboard", "/students", "/admin"].includes(location);
+    const noAnimation = ["/settings", "/income-dashboard", "/students"].includes(location);
     const page = (<Switch>
       <Route path="/" component={Dashboard}/>
       <Route path="/students" component={Students}/>
@@ -53,7 +57,6 @@ function Router() {
       <Route path="/attendance-history" component={AttendanceHistory}/>
       <Route path="/attendance-pad" component={AttendancePad}/>
       <Route path="/settings" component={GymSettings}/>
-      <Route path="/admin" component={Admin}/>
       <Route component={NotFound}/>
     </Switch>);
     if (noAnimation) {
@@ -68,6 +71,7 @@ function Router() {
 function App() {
     const role = useRole();
     const isStudent = role === "student";
+    const isGuest = role === null;
     const style = {
         "--sidebar-width": "16rem",
         "--sidebar-width-icon": "3rem",
@@ -85,6 +89,8 @@ function App() {
                   Logout
                 </Button>
               </div>
+              <Router />
+            </main>) : isGuest ? (<main className="min-h-screen bg-background" data-testid="login-layout">
               <Router />
             </main>) : (<SidebarProvider style={style}>
               <div className="flex h-screen w-full">

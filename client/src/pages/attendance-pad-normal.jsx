@@ -189,7 +189,8 @@ export default function AttendancePad() {
     }
     // Number pad view
     return (<div className="min-h-[calc(100vh-8rem)] flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-      <Card className="w-full max-w-md p-8 space-y-6 bg-card/80 backdrop-blur">
+      <Card className="w-full max-w-md p-8 bg-card/80 backdrop-blur">
+        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold text-foreground">Attendance</h1>
           <p className="text-sm text-muted-foreground">Enter your register number</p>
@@ -197,41 +198,36 @@ export default function AttendancePad() {
 
         <div className="space-y-2">
           <Label htmlFor="register-input">Register Number</Label>
-          <Input id="register-input" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Enter register number..." value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => {
-            if (e.key === "Enter") {
-                e.preventDefault();
-                if (!loading)
-                    handleSubmit();
-            }
-        }} className="text-center text-2xl font-bold h-16" data-testid="input-register-number" autoFocus/>
+          <Input id="register-input" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Enter register number..." value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value.replace(/\D/g, ""))} className="text-center text-2xl font-bold h-16" data-testid="input-register-number" autoFocus/>
         </div>
 
         <div className="grid grid-cols-3 gap-4">
-          {numbers.slice(0, 9).map((num) => (<Button key={num} variant="outline" size="lg" className="h-16 text-2xl font-semibold" onClick={() => handleNumberClick(num)} disabled={loading} data-testid={`button-number-${num}`}>
+          {numbers.slice(0, 9).map((num) => (<Button key={num} type="button" variant="outline" size="lg" className="h-16 text-2xl font-semibold" onMouseDown={(e) => e.preventDefault()} onClick={() => handleNumberClick(num)} disabled={loading} data-testid={`button-number-${num}`}>
               {num}
             </Button>))}
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          <Button variant="outline" size="lg" className="h-16 text-2xl font-semibold" onClick={() => handleNumberClick("0")} disabled={loading} data-testid="button-number-0">
+          <Button type="button" variant="outline" size="lg" className="h-16 text-2xl font-semibold" onMouseDown={(e) => e.preventDefault()} onClick={() => handleNumberClick("0")} disabled={loading} data-testid="button-number-0">
             0
           </Button>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Button variant="outline" size="lg" className="h-14" onClick={handleClearLast} disabled={loading} data-testid="button-clear-last">
+          <Button type="button" variant="outline" size="lg" className="h-14" onMouseDown={(e) => e.preventDefault()} onClick={handleClearLast} disabled={loading} data-testid="button-clear-last">
             <Delete className="mr-2 h-5 w-5"/>
             Clear Last
           </Button>
-          <Button variant="secondary" size="lg" className="h-14" onClick={handleClearAll} disabled={loading} data-testid="button-clear-all">
+          <Button type="button" variant="secondary" size="lg" className="h-14" onMouseDown={(e) => e.preventDefault()} onClick={handleClearAll} disabled={loading} data-testid="button-clear-all">
             Clear All
           </Button>
         </div>
 
-        <Button className="w-full h-14 text-lg font-semibold" onClick={handleSubmit} disabled={!registerNumber || loading} data-testid="button-submit-attendance">
+        <Button type="submit" className="w-full h-14 text-lg font-semibold" disabled={!registerNumber || loading} data-testid="button-submit-attendance">
           <Check className="mr-2 h-5 w-5"/>
           {loading ? "Recording..." : "Submit"}
         </Button>
+        </form>
       </Card>
     </div>);
 }

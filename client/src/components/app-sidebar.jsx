@@ -53,7 +53,7 @@ export function AppSidebar() {
     const { settings } = useGymSettings();
     return (<Sidebar>
       <SidebarHeader className="p-6 border-b">
-        <Link href="/admin" className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-150" data-testid="link-admin" title="Open owner admin page">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-150" data-testid="link-admin" title="Go to dashboard">
           <div className="flex h-10 w-10 items-center justify-center rounded-md text-xl flex-shrink-0 overflow-hidden" style={{ backgroundColor: settings.accentColor }}>
             {settings.logoImage ? (<img src={settings.logoImage} alt="Logo" className="w-full h-full object-cover" style={{ transform: `scale(${settings.cropScale})` }}/>) : (settings.icon)}
           </div>

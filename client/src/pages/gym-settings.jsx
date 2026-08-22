@@ -176,13 +176,6 @@ export default function GymSettings() {
               </div>
             </div>
 
-            {/* Buttons Container */}
-            <div className="flex gap-3">
-              <Button onClick={handleSaveSettings} className="w-full h-12 text-white font-bold" style={{ backgroundColor: primaryColor }} data-testid="button-save-settings">
-                Save Settings
-              </Button>
-            </div>
-
             {/* Note */}
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex gap-2">
               <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"/>
@@ -198,7 +191,8 @@ export default function GymSettings() {
           <CardHeader>
             <CardTitle>Owner Information</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent>
+            <form onSubmit={(e) => { e.preventDefault(); handleSaveSettings(); }} className="space-y-6">
             <p className="text-sm text-muted-foreground">
               These details are used to log in to the admin page. Clicking the gym name in the
               sidebar opens the owner login page.
@@ -225,13 +219,18 @@ export default function GymSettings() {
               </div>
             </div>
 
+            <Button type="submit" className="w-full h-12 text-white font-bold" style={{ backgroundColor: primaryColor }} data-testid="button-save-owner">
+              Save Owner Information
+            </Button>
+
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex gap-2">
               <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"/>
               <p className="text-sm text-blue-700 dark:text-blue-300">
                 The admin login at <strong>/admin</strong> is verified using the email and password
-                saved here. Save the settings above to apply these details.
+                saved here. Click <strong>Save Owner Information</strong> or press Enter to apply these details.
               </p>
             </div>
+            </form>
           </CardContent>
         </Card>
       </div>
