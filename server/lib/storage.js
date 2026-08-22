@@ -3,7 +3,10 @@ import postgres from "postgres";
 import { eq, sql } from "drizzle-orm";
 import { students, payments, attendance } from "../../shared/schema.js";
 
-const client = postgres(process.env.DATABASE_URL, { ssl: { rejectUnauthorized: false } });
+const client = postgres(process.env.DATABASE_URL, {
+  ssl: { rejectUnauthorized: false },
+  prepare: false,
+});
 const db = drizzle(client);
 
 export class DrizzleStorage {
