@@ -9,6 +9,7 @@ export async function registerRoutes(app) {
             res.json(stats);
         }
         catch (error) {
+            console.error("GET /api/dashboard/stats failed:", error);
             res.status(500).json({ error: "Failed to fetch dashboard stats" });
         }
     });
@@ -19,6 +20,7 @@ export async function registerRoutes(app) {
             res.json(students);
         }
         catch (error) {
+            console.error("GET /api/students failed:", error);
             res.status(500).json({ error: "Failed to fetch students" });
         }
     });
@@ -28,6 +30,7 @@ export async function registerRoutes(app) {
             res.json({ nextRegisterNo });
         }
         catch (error) {
+            console.error("GET /api/students/next-register-no failed:", error);
             res.status(500).json({ error: "Failed to fetch next register number" });
         }
     });
@@ -41,6 +44,7 @@ export async function registerRoutes(app) {
             res.json(student);
         }
         catch (error) {
+            console.error(`GET /api/students/${req.params.id} failed:`, error);
             res.status(500).json({ error: "Failed to fetch student" });
         }
     });
@@ -66,8 +70,10 @@ export async function registerRoutes(app) {
         }
         catch (error) {
             if (error.name === "ZodError") {
+                console.error("POST /api/students validation failed:", error.errors);
                 return res.status(400).json({ error: "Invalid student data", details: error.errors });
             }
+            console.error("POST /api/students failed:", error);
             res.status(500).json({ error: "Failed to create student" });
         }
     });
@@ -82,6 +88,7 @@ export async function registerRoutes(app) {
             res.json(updatedStudent);
         }
         catch (error) {
+            console.error(`PATCH /api/students/${req.params.id} failed:`, error);
             res.status(500).json({ error: "Failed to update student" });
         }
     });
@@ -96,6 +103,7 @@ export async function registerRoutes(app) {
             res.status(204).send();
         }
         catch (error) {
+            console.error(`DELETE /api/students/${req.params.id} failed:`, error);
             res.status(500).json({ error: "Failed to delete student" });
         }
     });
@@ -106,6 +114,7 @@ export async function registerRoutes(app) {
             res.json(payments);
         }
         catch (error) {
+            console.error("GET /api/payments failed:", error);
             res.status(500).json({ error: "Failed to fetch payments" });
         }
     });
@@ -136,8 +145,10 @@ export async function registerRoutes(app) {
         }
         catch (error) {
             if (error.name === "ZodError") {
+                console.error("POST /api/payments validation failed:", error.errors);
                 return res.status(400).json({ error: "Invalid payment data", details: error.errors });
             }
+            console.error("POST /api/payments failed:", error);
             res.status(500).json({ error: "Failed to create payment" });
         }
     });
@@ -152,6 +163,7 @@ export async function registerRoutes(app) {
             res.json(updatedPayment);
         }
         catch (error) {
+            console.error(`PATCH /api/payments/${req.params.id} failed:`, error);
             res.status(500).json({ error: "Failed to update payment" });
         }
     });
@@ -166,6 +178,7 @@ export async function registerRoutes(app) {
             res.status(204).send();
         }
         catch (error) {
+            console.error(`DELETE /api/payments/${req.params.id} failed:`, error);
             res.status(500).json({ error: "Failed to delete payment" });
         }
     });
@@ -176,6 +189,7 @@ export async function registerRoutes(app) {
             res.json(stats);
         }
         catch (error) {
+            console.error("GET /api/income/stats failed:", error);
             res.status(500).json({ error: "Failed to fetch income stats" });
         }
     });
@@ -187,6 +201,7 @@ export async function registerRoutes(app) {
             res.json(records);
         }
         catch (error) {
+            console.error("GET /api/attendance failed:", error);
             res.status(500).json({ error: "Failed to fetch attendance records" });
         }
     });
@@ -272,6 +287,7 @@ export async function registerRoutes(app) {
             res.status(200).json({
                 type: "success",
                 message: "Attendance marked successfully",
+                timeIn,
                 student: {
                     name: student.name,
                     registerNumber: student.registerNo,
@@ -282,6 +298,7 @@ export async function registerRoutes(app) {
             });
         }
         catch (error) {
+            console.error("POST /api/attendance failed:", error);
             res.status(500).json({
                 type: "error",
                 message: "Failed to record attendance",

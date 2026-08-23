@@ -169,32 +169,36 @@ export default function Students() {
             }
             setAttendanceFeedback({
                 type: data.type,
+                message: data.message,
                 data: {
-                    name: data.name,
-                    date: data.date,
-                    timeIn: data.timeIn,
-                    daysLeft: data.daysLeft,
-                    status: data.status,
+                    name: data.student?.name ?? null,
+                    date: new Date().toISOString().split("T")[0],
+                    timeIn: data.timeIn ?? null,
+                    daysLeft: typeof data.daysLeft === "number" ? data.daysLeft : null,
+                    status: typeof data.isExpired === "boolean" ? (data.isExpired ? "EXPIRED" : "ACTIVE") : null,
                 },
             });
         },
         onError: (error) => {
             try {
-                const errorData = JSON.parse(error.message.split(": ")[1] || "{}");
+                const body = error.message.slice(error.message.indexOf(": ") + 2);
+                const errorData = JSON.parse(body);
                 setAttendanceFeedback({
                     type: errorData.type || "not_found",
+                    message: errorData.message,
                     data: {
-                        name: errorData.name || null,
-                        date: errorData.date || null,
-                        timeIn: errorData.timeIn || null,
-                        daysLeft: errorData.daysLeft || null,
-                        status: errorData.status || null,
+                        name: errorData.student?.name ?? null,
+                        date: errorData.student?.expiryDate ?? null,
+                        timeIn: errorData.timeIn ?? null,
+                        daysLeft: typeof errorData.daysLeft === "number" ? errorData.daysLeft : null,
+                        status: typeof errorData.isExpired === "boolean" ? (errorData.isExpired ? "EXPIRED" : "ACTIVE") : null,
                     },
                 });
             }
             catch {
                 setAttendanceFeedback({
                     type: "not_found",
+                    message: "Student not found",
                     data: {
                         name: null,
                         date: null,
@@ -404,7 +408,7 @@ export default function Students() {
                     <AlertCircle className="h-16 w-16 text-red-500 mx-auto"/>
                     <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">
                       {attendanceFeedback.type === "expired" ? "Membership Expired" :
-                    attendanceFeedback.type === "already_marked" ? "Already Checked In" :
+                    attendanceFeedback.type === "warning" ? "Already Checked In" :
                         "Student Not Found"}
                     </h2>
                   </div>)}

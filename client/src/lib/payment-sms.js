@@ -32,5 +32,5 @@ export function buildPaymentSms(input) {
     ].join("\n");
 }
 export function buildSmsLink(phone, message) {
-    return `sms:+91${phone}?&body=${encodeURIComponent(message)}`;
+    return `sms:+91${phone}?body=${encodeURIComponent(message)}`;
 }

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,9 +10,6 @@ export default function AttendancePad() {
     const [previewData, setPreviewData] = useState(null);
     const [loading, setLoading] = useState(false);
     const { toast } = useToast();
-    const { data: students } = useQuery({
-        queryKey: ["/api/students"],
-    });
     const handleNumberClick = (num) => {
         setRegisterNumber((prev) => prev + num);
     };
@@ -32,14 +28,6 @@ export default function AttendancePad() {
             });
             return;
         }
-        const student = students?.find((s) => s.registerNo === registerNumber);
-        if (!student) {
-            toast({
-                title: "Student not found",
-                variant: "destructive",
-            });
-            return;
-        }
         setLoading(true);
         try {
             const now = new Date();
@@ -53,7 +41,7 @@ export default function AttendancePad() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    registerNumber: student.registerNo,
+                    registerNumber: registerNumber.trim(),
                 }),
             });
             const data = await response.json();
@@ -94,7 +82,7 @@ export default function AttendancePad() {
                     statusColor: "text-green-600 dark:text-green-400",
                     icon: <CheckCircle className="w-8 h-8"/>,
                 };
-            case "already_marked":
+            case "warning":
                 return {
                     borderColor: "border-yellow-500",
                     bgColor: "bg-yellow-50 dark:bg-slate-900",

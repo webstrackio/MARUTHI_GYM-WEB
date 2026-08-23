@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation, Redirect } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -24,21 +24,21 @@ import { LogOut } from "lucide-react";
 function Router() {
     const [location] = useLocation();
     const role = useRole();
-    // Students can only access the attendance pad
+    // Students can only access the attendance pad (rendered directly – no
+    // programmatic redirect on load, otherwise Chrome marks the entry skippable)
     if (role === "student") {
-        return location === "/attendance-pad" ? (<AttendancePad />) : (<Redirect to="/attendance-pad"/>);
+        return <AttendancePad />;
     }
-    // Not logged in: only the login page (and settings for first-time setup), rendered full-screen without any navigation
+    // Not logged in: only the login page (and settings for first-time setup),
+    // rendered full-screen without any navigation
     if (role === null) {
-        if (location === "/login" || location === "/admin")
-            return <Admin />;
         if (location === "/settings")
             return <GymSettings />;
-        return <Redirect to="/login"/>;
+        return <Admin />;
     }
     // Already logged in: the login page has nothing to offer
     if (location === "/login" || location === "/admin") {
-        return <Redirect to="/"/>;
+        return (<Dashboard />);
     }
     if (location === "/attendance-pad") {
         return (<Switch>

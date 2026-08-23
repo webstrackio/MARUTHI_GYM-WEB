@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, SidebarHeader, } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, DollarSign, TrendingUp, History, Calendar, LogOut, Moon, Edit, Settings, } from "lucide-react";
+import { LayoutDashboard, Users, DollarSign, TrendingUp, History, Calendar, LogOut, Moon, Sun, Edit, Settings, } from "lucide-react";
 import { useTheme } from "./theme-provider";
 import { Button } from "./ui/button";
 import { useGymSettings } from "@/hooks/use-gym-settings";
@@ -86,8 +86,8 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 space-y-2 border-t">
         <Button variant="ghost" className="w-full justify-start gap-3 h-auto px-4 py-3" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} data-testid="button-dark-mode">
           {theme === "dark" ? (<>
-              <Moon className="h-5 w-5 flex-shrink-0"/>
-              <span className="font-medium">Dark Mode</span>
+              <Sun className="h-5 w-5 flex-shrink-0"/>
+              <span className="font-medium">Light Mode</span>
             </>) : (<>
               <Moon className="h-5 w-5 flex-shrink-0"/>
               <span className="font-medium">Dark Mode</span>

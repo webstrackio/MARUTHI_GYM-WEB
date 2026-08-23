@@ -207,7 +207,7 @@ export default function Payments() {
                     </FormItem>)}/>
 
                 <Button type="submit" className="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white h-11" disabled={paymentMutation.isPending} data-testid="button-record-payment">
-                  {paymentMutation.isPending ? "Recording..." : "$  Record Payment"}
+                  {paymentMutation.isPending ? "Recording..." : "Record Payment"}
                 </Button>
               </form>
             </Form>

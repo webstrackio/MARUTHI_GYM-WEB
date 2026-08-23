@@ -7,6 +7,7 @@ export default async function handler(req, res) {
       const records = await storage.getAttendanceByDate(date);
       res.json(records);
     } catch (error) {
+      console.error("GET /api/attendance failed:", error);
       res.status(500).json({ error: "Failed to fetch attendance records" });
     }
   } else if (req.method === "POST") {
@@ -81,6 +82,7 @@ export default async function handler(req, res) {
       res.status(200).json({
         type: "success",
         message: "Attendance marked successfully",
+        timeIn,
         student: {
           name: student.name,
           registerNumber: student.registerNo,
