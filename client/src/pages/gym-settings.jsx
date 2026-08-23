@@ -92,9 +92,9 @@ export default function GymSettings() {
         });
         toast({
             title: "Settings saved!",
-            description: "Your gym branding has been updated. The page will reload to apply changes.",
+            description: "Your gym information has been updated. Redirecting to the login page...",
         });
-        setTimeout(() => window.location.reload(), 1000);
+        setTimeout(() => { window.location.href = "/admin"; }, 1000);
     };
     return (<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
       {/* Left Side - Form */}
@@ -180,7 +180,7 @@ export default function GymSettings() {
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex gap-2">
               <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"/>
               <p className="text-sm text-blue-700 dark:text-blue-300">
-                After saving, the page will reload to apply your changes throughout the entire application.
+                After saving, you will be redirected directly to the login page to sign in with your owner credentials.
               </p>
             </div>
           </CardContent>
@@ -269,7 +269,7 @@ export default function GymSettings() {
             {/* Note */}
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
               <p className="text-xs text-blue-700 dark:text-blue-300">
-                <strong>Note:</strong> After saving, the page will reload to apply your changes throughout the entire application.
+                <strong>Note:</strong> After saving, you will be redirected directly to the login page.
               </p>
             </div>
           </CardContent>
