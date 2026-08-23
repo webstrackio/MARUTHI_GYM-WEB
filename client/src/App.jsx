@@ -20,19 +20,21 @@ import GymSettings from "@/pages/gym-settings";
 import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 import { useRole, logout, getStudentSession } from "@/lib/auth";
+import { useGymSettings } from "@/hooks/use-gym-settings";
 import { LogOut } from "lucide-react";
 function Router() {
     const [location] = useLocation();
     const role = useRole();
+    const { settings } = useGymSettings();
     // Students can only access the attendance pad (rendered directly – no
     // programmatic redirect on load, otherwise Chrome marks the entry skippable)
     if (role === "student") {
         return <AttendancePad />;
     }
-    // Not logged in: only the login page (and settings for first-time setup),
-    // rendered full-screen without any navigation
+    // Not logged in: only the login page. Settings is reachable only for
+    // first-time setup (until an owner password has been saved)
     if (role === null) {
-        if (location === "/settings")
+        if (location === "/settings" && !settings.ownerPassword)
             return <GymSettings />;
         return <Admin />;
     }
