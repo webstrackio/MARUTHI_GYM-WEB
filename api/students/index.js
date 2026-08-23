@@ -7,6 +7,7 @@ export default async function handler(req, res) {
       const students = await storage.getStudents();
       res.json(students);
     } catch (error) {
+      console.error("GET /api/students failed:", error);
       res.status(500).json({ error: "Failed to fetch students" });
     }
   } else if (req.method === "POST") {
@@ -28,8 +29,10 @@ export default async function handler(req, res) {
       res.status(201).json(student);
     } catch (error) {
       if (error.name === "ZodError") {
+        console.error("POST /api/students validation failed:", error.errors);
         return res.status(400).json({ error: "Invalid student data", details: error.errors });
       }
+      console.error("POST /api/students failed:", error);
       res.status(500).json({ error: "Failed to create student" });
     }
   } else {

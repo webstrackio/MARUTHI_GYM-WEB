@@ -8,6 +8,7 @@ export default async function handler(req, res) {
     const nextRegisterNo = await storage.getNextRegisterNo();
     res.json({ nextRegisterNo });
   } catch (error) {
+    console.error("GET /api/students/next-register-no failed:", error);
     res.status(500).json({ error: "Failed to fetch next register number" });
   }
 }

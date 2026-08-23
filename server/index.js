@@ -40,10 +40,10 @@ app.use((req, res, next) => {
     log(`NODE_ENV === "development": ${nodeEnv === "development"}`);
     log(`NODE_ENV.trim() === "development": ${nodeEnv.trim() === "development"}`);
     app.use((err, _req, res, _next) => {
+        console.error(err.stack || err);
         const status = err.status || err.statusCode || 500;
         const message = err.message || "Internal Server Error";
         res.status(status).json({ message });
-        throw err;
     });
     // importantly only setup vite in development and after
     // setting up all the other routes so the catch-all route

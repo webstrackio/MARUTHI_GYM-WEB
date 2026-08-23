@@ -8,6 +8,7 @@ export default async function handler(req, res) {
     const stats = await storage.getIncomeStats();
     res.json(stats);
   } catch (error) {
+    console.error("GET /api/income/stats failed:", error);
     res.status(500).json({ error: "Failed to fetch income stats" });
   }
 }

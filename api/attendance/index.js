@@ -90,6 +90,7 @@ export default async function handler(req, res) {
         isExpired: false,
       });
     } catch (error) {
+      console.error("POST /api/attendance failed:", error);
       res.status(500).json({
         type: "error",
         message: "Failed to record attendance",

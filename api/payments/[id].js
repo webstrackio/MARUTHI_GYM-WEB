@@ -12,6 +12,7 @@ export default async function handler(req, res) {
       const updatedPayment = await storage.updatePayment(parseInt(id), req.body);
       res.json(updatedPayment);
     } catch (error) {
+      console.error(`PATCH /api/payments/${id} failed:`, error);
       res.status(500).json({ error: "Failed to update payment" });
     }
   } else if (req.method === "DELETE") {
@@ -23,6 +24,7 @@ export default async function handler(req, res) {
       await storage.deletePayment(parseInt(id));
       res.status(204).send();
     } catch (error) {
+      console.error(`DELETE /api/payments/${id} failed:`, error);
       res.status(500).json({ error: "Failed to delete payment" });
     }
   } else {

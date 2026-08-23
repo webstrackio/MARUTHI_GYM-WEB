@@ -7,6 +7,7 @@ export default async function handler(req, res) {
       const payments = await storage.getPayments();
       res.json(payments);
     } catch (error) {
+      console.error("GET /api/payments failed:", error);
       res.status(500).json({ error: "Failed to fetch payments" });
     }
   } else if (req.method === "POST") {
@@ -33,8 +34,10 @@ export default async function handler(req, res) {
       res.status(201).json(payment);
     } catch (error) {
       if (error.name === "ZodError") {
+        console.error("POST /api/payments validation failed:", error.errors);
         return res.status(400).json({ error: "Invalid payment data", details: error.errors });
       }
+      console.error("POST /api/payments failed:", error);
       res.status(500).json({ error: "Failed to create payment" });
     }
   } else {

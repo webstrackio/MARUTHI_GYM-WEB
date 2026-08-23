@@ -11,6 +11,7 @@ export default async function handler(req, res) {
       }
       res.json(student);
     } catch (error) {
+      console.error(`GET /api/students/${id} failed:`, error);
       res.status(500).json({ error: "Failed to fetch student" });
     }
   } else if (req.method === "PATCH") {
@@ -22,6 +23,7 @@ export default async function handler(req, res) {
       const updatedStudent = await storage.updateStudent(parseInt(id), req.body);
       res.json(updatedStudent);
     } catch (error) {
+      console.error(`PATCH /api/students/${id} failed:`, error);
       res.status(500).json({ error: "Failed to update student" });
     }
   } else if (req.method === "DELETE") {
@@ -33,6 +35,7 @@ export default async function handler(req, res) {
       await storage.deleteStudent(parseInt(id));
       res.status(204).send();
     } catch (error) {
+      console.error(`DELETE /api/students/${id} failed:`, error);
       res.status(500).json({ error: "Failed to delete student" });
     }
   } else {
