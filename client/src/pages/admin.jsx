@@ -30,8 +30,8 @@ export default function Admin() {
         if (password === settings.ownerPassword) {
             loginAsAdmin();
             setPassword("");
-            toast({ title: "Logged in successfully", description: `Welcome, owner of ${settings.name || "Gym"}` });
-            navigate("/");
+            toast({ title: "Logged in successfully", description: "Update your gym name, email and password in Settings." });
+            navigate("/settings");
         }
         else {
             toast({ title: "Invalid credentials", description: "Password does not match.", variant: "destructive" });
