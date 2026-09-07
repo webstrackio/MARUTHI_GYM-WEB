@@ -8,14 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Receipt, MessageSquare, Copy } from "lucide-react";
+import { CreditCard, Receipt } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { useGymSettings } from "@/hooks/use-gym-settings";
-import { buildPaymentSms, buildSmsLink } from "@/lib/payment-sms";
 import { addCalendarMonths, toDateInputValue } from "@shared/dates";
 const formSchema = z.object({
     searchQuery: z.string(),
@@ -29,7 +27,6 @@ export default function Payments() {
     const search = useSearch();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedStudent, setSelectedStudent] = useState(null);
-    const [smsReceipt, setSmsReceipt] = useState(null);
     const autoSelectedRef = useRef(false);
     const { toast } = useToast();
     const { settings } = useGymSettings();
@@ -86,19 +83,6 @@ export default function Payments() {
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
-            const student = students?.find((s) => s.id === variables.studentId);
-            const phone = student?.phone || variables.phone || "";
-            const endDate = getNewExpiryDate(variables.date, variables.duration, student?.expiryDate ?? "");
-            const message = buildPaymentSms({
-                studentName: variables.studentName,
-                amount: variables.amount,
-                duration: variables.duration,
-                paymentMethod: variables.paymentMethod,
-                startDate: variables.date,
-                endDate: endDate,
-                gymName: settings.name,
-            });
-            setSmsReceipt({ studentName: variables.studentName, phone, message });
             toast({ title: "Payment recorded successfully" });
             setSelectedStudent(null);
             setSearchQuery("");
@@ -304,46 +288,5 @@ export default function Payments() {
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={smsReceipt !== null} onOpenChange={(open) => !open && setSmsReceipt(null)}>
-        <DialogContent className="max-w-lg" data-testid="dialog-sms-receipt">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-green-500"/>
-              Payment Receipt SMS
-            </DialogTitle>
-            <DialogDescription>
-              Send this receipt as a normal SMS to {smsReceipt?.studentName}{" "}
-              {smsReceipt?.phone ? `(+91 ${smsReceipt.phone})` : ""}
-            </DialogDescription>
-          </DialogHeader>
-          {smsReceipt && (<div className="space-y-4">
-              <div className="p-4 rounded-lg bg-gray-100 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800">
-                <pre className="whitespace-pre-wrap text-sm text-foreground font-sans">
-                  {smsReceipt.message}
-                </pre>
-              </div>
-
-              <DialogFooter className="gap-2 sm:justify-start">
-                {smsReceipt.phone ? (<a href={buildSmsLink(smsReceipt.phone, smsReceipt.message)} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 transition-all duration-150 hover-elevate active-elevate-2 min-h-9 px-4 py-2 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white" data-testid="button-send-sms">
-                    <MessageSquare className="h-4 w-4"/>
-                    Send SMS
-                  </a>) : (<p className="text-sm text-muted-foreground">
-                    No mobile number on file for this student.
-                  </p>)}
-                <Button variant="outline" onClick={() => {
-                navigator.clipboard.writeText(smsReceipt.message);
-                toast({ title: "Message copied to clipboard" });
-            }} data-testid="button-copy-sms">
-                  <Copy className="h-4 w-4"/>
-                  Copy Message
-                </Button>
-                <Button variant="ghost" onClick={() => setSmsReceipt(null)} data-testid="button-close-sms">
-                  Close
-                </Button>
-              </DialogFooter>
-            </div>)}
-        </DialogContent>
-      </Dialog>
     </div>);
 }

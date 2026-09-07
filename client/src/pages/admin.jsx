@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { useToast } from "@/hooks/use-toast";
 import { loginAsAdmin, loginAsStudent, logout, useRole } from "@/lib/auth";
-import { isDeviceUnlockAvailable, registerDeviceUnlock, unlockWithDevice } from "@/lib/device-auth";
-import { ShieldCheck, LogOut, Mail, Lock, User, Eye, EyeOff, Fingerprint } from "lucide-react";
+import { ShieldCheck, LogOut, Mail, Lock, User, Eye, EyeOff, Settings } from "lucide-react";
 export default function Admin() {
     const { settings } = useGymSettings();
     const { toast } = useToast();
@@ -17,55 +16,20 @@ export default function Admin() {
     const [, navigate] = useLocation();
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
-    const [deviceUnlockReady, setDeviceUnlockReady] = useState(false);
-    useEffect(() => {
-        isDeviceUnlockAvailable().then(setDeviceUnlockReady);
-    }, []);
-    const ownerConfigured = Boolean(settings.ownerPassword);
+
     const handleAdminLogin = async (e) => {
         e.preventDefault();
-        if (!ownerConfigured) {
-            toast({
-                title: "Owner details not configured",
-                description: "Please set the owner password in Settings first.",
-                variant: "destructive",
-            });
-            return;
-        }
         if (password === settings.ownerPassword) {
             loginAsAdmin();
             setPassword("");
-            toast({ title: "Logged in successfully", description: "Update your gym name, email and password in Settings." });
+            toast({ title: "Logged in successfully", description: `Welcome back, owner of ${settings.name || "Gym"}` });
             navigate("/");
-            if (deviceUnlockReady) {
-                registerDeviceUnlock(settings.ownerEmail, settings.name)
-                    .then((enabled) => {
-                    if (enabled)
-                        toast({
-                            title: "Device unlock enabled",
-                            description: "Next time you can log in with your fingerprint or device PIN/password.",
-                        });
-                })
-                    .catch(() => { });
-            }
         }
         else {
             toast({ title: "Invalid credentials", description: "Password does not match.", variant: "destructive" });
         }
     };
-    const handleDeviceLogin = async () => {
-        if (!ownerConfigured)
-            return;
-        const verified = await unlockWithDevice();
-        if (verified) {
-            loginAsAdmin();
-            toast({ title: "Logged in successfully", description: `Welcome back, owner of ${settings.name || "Gym"}` });
-            navigate("/");
-        }
-        else {
-            toast({ title: "Device unlock failed", description: "Log in with your owner password instead.", variant: "destructive" });
-        }
-    };
+
     const handleStudentLogin = () => {
         loginAsStudent({
             id: 0,
@@ -153,27 +117,7 @@ export default function Admin() {
                 </TabsList>
 
                 <TabsContent value="admin" className="space-y-4">
-                  {!ownerConfigured ? (<div className="space-y-4">
-                      <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-300">
-                        Owner password is not set yet. Please go to Settings and
-                        save it before logging in.
-                      </div>
-                      <Button variant="outline" className="w-full" asChild>
-                        <Link href="/settings">Go to Settings</Link>
-                      </Button>
-                    </div>                    ) : (<div className="space-y-4">
-                      {deviceUnlockReady && (<>
-                          <Button type="button" onClick={handleDeviceLogin} className="w-full h-12 text-white font-bold" style={{ backgroundColor: settings.accentColor }} data-testid="button-device-login">
-                            <Fingerprint className="mr-2 h-5 w-5"/>
-                            Login with fingerprint / device lock
-                          </Button>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span className="h-px flex-1 bg-border"/>
-                            or use password
-                            <span className="h-px flex-1 bg-border"/>
-                          </div>
-                        </>)}
-                      <form onSubmit={handleAdminLogin} className="space-y-4">
+                  {settings.ownerPassword ? (<form onSubmit={handleAdminLogin} className="space-y-4">
                       
                       <div className="space-y-2">
                         <Label htmlFor="admin-password">Enter Password</Label>
@@ -187,7 +131,10 @@ export default function Admin() {
                       <Button type="submit" className="w-full" data-testid="button-admin-login">
                         Login as Owner
                       </Button>
-                      </form>
+                      </form>): (<div className="space-y-4">
+                      <Button variant="outline" className="w-full" asChild>
+                        <Link href="/settings"><Settings className="mr-2 h-4 w-4"/> Go to Settings</Link>
+                      </Button>
                     </div>)}
                 </TabsContent>
 

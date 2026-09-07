@@ -31,10 +31,9 @@ function Router() {
     if (role === "student") {
         return <AttendancePad />;
     }
-    // Not logged in: only the login page. Settings is reachable only for
-    // first-time setup (until an owner password has been saved)
+    // Not logged in: login page, reachable from the login page for setup
     if (role === null) {
-        if (location === "/settings" && !settings.ownerPassword)
+        if (location === "/settings")
             return <GymSettings />;
         return <Admin />;
     }
