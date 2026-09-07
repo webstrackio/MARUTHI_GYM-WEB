@@ -134,12 +134,14 @@ export default function Students() {
     });
     const createMutation = useMutation({
         mutationFn: (data) => apiRequest("POST", "/api/students", data),
-        onSuccess: () => {
+        onSuccess: async (response) => {
+            const createdStudent = await response.json();
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             toast({ title: "Student added successfully" });
             setIsDialogOpen(false);
             form.reset();
+            navigate(`/payments?studentId=${createdStudent.id}`);
         },
         onError: () => {
             toast({ title: "Failed to add student", variant: "destructive" });

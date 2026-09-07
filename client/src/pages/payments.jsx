@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -24,9 +25,11 @@ const formSchema = z.object({
     paymentMethod: z.enum(["cash", "online"]),
 });
 export default function Payments() {
+    const search = useSearch();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [smsReceipt, setSmsReceipt] = useState(null);
+    const autoSelectedRef = useRef(false);
     const { toast } = useToast();
     const { settings } = useGymSettings();
     const { data: students } = useQuery({
@@ -46,6 +49,20 @@ export default function Payments() {
             paymentMethod: "cash",
         },
     });
+    useEffect(() => {
+        if (autoSelectedRef.current || !students || !search)
+            return;
+        const studentId = Number(new URLSearchParams(search).get("studentId"));
+        if (!studentId)
+            return;
+        const student = students.find((s) => s.id === studentId);
+        if (student) {
+            autoSelectedRef.current = true;
+            setSelectedStudent(student);
+            setSearchQuery(student.name);
+            form.setValue("studentId", student.id);
+        }
+    }, [students, search]);
     const normalize = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
     const filteredStudents = students?.filter((s) => {
         const q = normalize(searchQuery);
