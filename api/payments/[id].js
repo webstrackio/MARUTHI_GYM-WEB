@@ -1,15 +1,22 @@
 import { storage } from "../../server/lib/storage.js";
 
 export default async function handler(req, res) {
-  const { id } = req.query;
+  const id = parseInt(req.params.id, 10);
 
   if (req.method === "PATCH") {
     try {
-      const payment = await storage.getPaymentById(parseInt(id));
+      const payment = await storage.getPaymentById(id);
       if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
       }
-      const updatedPayment = await storage.updatePayment(parseInt(id), req.body);
+      if (req.body.duration !== undefined) {
+        const durationMonths = Number(req.body.duration);
+        if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > 120) {
+          return res.status(400).json({ error: "Duration must be a whole number of months (1 - 120)" });
+        }
+      }
+      const updatedPayment = await storage.updatePayment(id, req.body);
+      await storage.recomputeStudentExpiry(updatedPayment.studentId);
       res.json(updatedPayment);
     } catch (error) {
       console.error(`PATCH /api/payments/${id} failed:`, error);
@@ -22,6 +29,7 @@ export default async function handler(req, res) {
         return res.status(404).json({ error: "Payment not found" });
       }
       await storage.deletePayment(parseInt(id));
+      await storage.recomputeStudentExpiry(payment.studentId);
       res.status(204).send();
     } catch (error) {
       console.error(`DELETE /api/payments/${id} failed:`, error);

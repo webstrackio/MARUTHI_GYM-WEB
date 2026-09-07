@@ -191,8 +191,7 @@ export default function IncomeDashboard() {
               <CardDescription>All time payment count</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (<Skeleton className="h-10 w-32"/>) : (<p className="text-3xl font-bold text-black dark:text-white flex items-center gap-1" data-testid="text-total-payments">
-                  <span className="text-blue-600 dark:text-blue-400">$</span>
+              {isLoading ? (<Skeleton className="h-10 w-32"/>) : (<p className="text-3xl font-bold text-black dark:text-white" data-testid="text-total-payments">
                   {stats?.totalPaymentsReceived ?? 0}
                 </p>)}
             </CardContent>

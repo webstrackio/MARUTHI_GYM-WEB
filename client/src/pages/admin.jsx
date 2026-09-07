@@ -36,7 +36,7 @@ export default function Admin() {
             loginAsAdmin();
             setPassword("");
             toast({ title: "Logged in successfully", description: "Update your gym name, email and password in Settings." });
-            navigate("/settings");
+            navigate("/");
             if (deviceUnlockReady) {
                 registerDeviceUnlock(settings.ownerEmail, settings.name)
                     .then((enabled) => {
@@ -60,7 +60,7 @@ export default function Admin() {
         if (verified) {
             loginAsAdmin();
             toast({ title: "Logged in successfully", description: `Welcome back, owner of ${settings.name || "Gym"}` });
-            navigate("/settings");
+            navigate("/");
         }
         else {
             toast({ title: "Device unlock failed", description: "Log in with your owner password instead.", variant: "destructive" });

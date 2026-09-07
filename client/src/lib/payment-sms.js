@@ -8,13 +8,10 @@ export function formatSmsDate(date) {
         .replace(/ /g, "-");
 }
 export function formatPlanLabel(duration) {
-    if (duration % 365 === 0 && duration / 365 > 0) {
-        return `${duration / 365} year${duration / 365 > 1 ? "s" : ""}`;
+    if (duration % 12 === 0 && duration / 12 > 0) {
+        return `${duration / 12} year${duration / 12 > 1 ? "s" : ""}`;
     }
-    if (duration % 30 === 0 && duration / 30 > 0) {
-        return `${duration / 30} month${duration / 30 > 1 ? "s" : ""}`;
-    }
-    return `${duration} days`;
+    return `${duration} month${duration > 1 ? "s" : ""}`;
 }
 export function buildPaymentSms(input) {
     const methodLabel = input.paymentMethod === "cash" ? "Cash" : "Online";

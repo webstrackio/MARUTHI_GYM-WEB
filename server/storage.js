@@ -3,6 +3,7 @@ import pg from "pg";
 const { Pool } = pg;
 import { eq, sql } from "drizzle-orm";
 import { students, payments, attendance, } from "../shared/schema.js";
+import { addCalendarMonths, toDateInputValue } from "../shared/dates.js";
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
@@ -58,6 +59,21 @@ export class DrizzleStorage {
     }
     async deletePayment(id) {
         await db.delete(payments).where(eq(payments.id, id));
+    }
+    // Recomputes a student's expiry date by replaying all of their payments in
+    // chronological order. Used after a payment is edited or deleted so the
+    // membership stays consistent with the remaining payment records.
+    async recomputeStudentExpiry(studentId) {
+        const studentPayments = await db.select().from(payments)
+            .where(eq(payments.studentId, studentId))
+            .orderBy(payments.date, payments.id);
+        let expiry = null;
+        for (const p of studentPayments) {
+            const baseDate = expiry && new Date(expiry) > new Date(p.date) ? new Date(expiry) : new Date(p.date);
+            expiry = toDateInputValue(addCalendarMonths(baseDate, p.duration));
+            await db.update(payments).set({ startDate: p.date, expiryDate: expiry }).where(eq(payments.id, p.id));
+        }
+        await db.update(students).set({ expiryDate: expiry }).where(eq(students.id, studentId));
     }
     // Attendance
     async getAttendanceByDate(date) {

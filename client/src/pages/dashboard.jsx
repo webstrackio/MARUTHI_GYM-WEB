@@ -5,8 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Users, UserCheck, UserX, CalendarCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGymSettings } from "@/hooks/use-gym-settings";
+import { daysUntil, parseDateString } from "@shared/dates";
+import { useToday } from "@/hooks/use-today";
 export default function Dashboard() {
     const { settings } = useGymSettings();
+    const todayDate = parseDateString(useToday());
     const { data: stats, isLoading } = useQuery({
         queryKey: ["/api/dashboard/stats"],
     });
@@ -14,25 +17,14 @@ export default function Dashboard() {
         queryKey: ["/api/students"],
     });
     const daysOverdue = (expiryDate) => {
-        if (!expiryDate)
-            return 0;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const expiry = new Date(expiryDate);
-        expiry.setHours(0, 0, 0, 0);
-        return Math.round((today.getTime() - expiry.getTime()) / (1000 * 60 * 60 * 24));
+        return Math.max(0, -daysUntil(expiryDate, todayDate));
     };
     const expiredMembers = students?.filter((s) => {
         // A student with no payment recorded (no expiry date) is treated as expired
         if (!s.expiryDate)
             return true;
-        const expiryDate = new Date(s.expiryDate);
-        const today = new Date();
-        // Compare only the date part (set time to 00:00:00)
-        expiryDate.setHours(0, 0, 0, 0);
-        today.setHours(0, 0, 0, 0);
-        // Expired when the expiry date is today or earlier
-        return expiryDate <= today;
+        // Expired when no days remain (expiry is today or earlier)
+        return daysUntil(s.expiryDate, todayDate) <= 0;
     }) || [];
     const statCards = [
         {

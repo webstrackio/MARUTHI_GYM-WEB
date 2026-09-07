@@ -1,4 +1,5 @@
 import { storage } from "../../server/lib/storage.js";
+import { daysUntil } from "../../shared/dates.js";
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
@@ -34,14 +35,7 @@ export default async function handler(req, res) {
         });
       }
       const now = new Date();
-      let daysLeft = 0;
-      if (student.expiryDate) {
-        const expiryDate = new Date(student.expiryDate);
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const expiryStart = new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate());
-        const daysDiff = Math.ceil((expiryStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
-        daysLeft = daysDiff;
-      }
+      const daysLeft = Math.max(0, daysUntil(student.expiryDate));
       const isExpired = !student.expiryDate || daysLeft <= 0;
       if (isExpired) {
         return res.status(200).json({

@@ -17,7 +17,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 const editPaymentSchema = z.object({
     date: z.string().min(1, "Date is required"),
-    duration: z.number().min(1, "Duration must be at least 1 day"),
+    durationMonths: z.number().min(1, "Duration is required"),
     amount: z.number().min(1, "Amount must be greater than 0"),
     paymentMethod: z.enum(["cash", "online"]),
 });
@@ -33,7 +33,7 @@ export default function ModifyPayments() {
         resolver: zodResolver(editPaymentSchema),
         defaultValues: {
             date: new Date().toISOString().split("T")[0],
-            duration: 0,
+            durationMonths: 0,
             amount: 0,
             paymentMethod: "cash",
         },
@@ -44,6 +44,7 @@ export default function ModifyPayments() {
             queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             toast({ title: "Payment updated successfully" });
             setIsDialogOpen(false);
             setEditingPayment(null);
@@ -59,6 +60,7 @@ export default function ModifyPayments() {
             queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             toast({ title: "Payment deleted successfully" });
         },
         onError: () => {
@@ -69,7 +71,7 @@ export default function ModifyPayments() {
         setEditingPayment(payment);
         form.reset({
             date: payment.date,
-            duration: payment.duration,
+            durationMonths: payment.duration,
             amount: payment.amount,
             paymentMethod: payment.paymentMethod,
         });
@@ -77,7 +79,7 @@ export default function ModifyPayments() {
     };
     const onSubmit = (data) => {
         if (editingPayment) {
-            updateMutation.mutate({ ...data, id: editingPayment.id });
+            updateMutation.mutate({ ...data, duration: data.durationMonths, id: editingPayment.id });
         }
     };
     return (<div className="space-y-6">
@@ -114,7 +116,7 @@ export default function ModifyPayments() {
                       <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
                       <TableCell>{payment.studentName}</TableCell>
                       <TableCell>{payment.registerNo}</TableCell>
-                      <TableCell>{payment.duration} days</TableCell>
+                      <TableCell>{payment.duration} month{payment.duration > 1 ? "s" : ""}</TableCell>
                       <TableCell>
                         <div className={`flex items-center gap-2 w-fit px-3 py-1 rounded-md ${payment.paymentMethod === "cash"
                     ? "bg-green-100 dark:bg-green-900/30"
@@ -166,11 +168,22 @@ export default function ModifyPayments() {
                     <FormMessage />
                   </FormItem>)}/>
 
-              <FormField control={form.control} name="duration" render={({ field }) => (<FormItem>
-                    <FormLabel>Membership Duration (Days) *</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="Enter number of days" value={field.value === 0 ? "" : field.value} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)} data-testid="input-duration"/>
-                    </FormControl>
+              <FormField control={form.control} name="durationMonths" render={({ field }) => (<FormItem>
+                    <FormLabel>Membership Duration *</FormLabel>
+                    <Select onValueChange={(v) => field.onChange(parseInt(v))} value={field.value ? String(field.value) : undefined}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-membership-duration">
+                          <SelectValue placeholder="Select duration"/>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="1">1 Month</SelectItem>
+                        <SelectItem value="2">2 Months</SelectItem>
+                        <SelectItem value="3">3 Months</SelectItem>
+                        <SelectItem value="6">6 Months</SelectItem>
+                        <SelectItem value="12">1 Year</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>)}/>
 

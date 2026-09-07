@@ -16,11 +16,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { buildPaymentSms, buildSmsLink } from "@/lib/payment-sms";
+import { addCalendarMonths, toDateInputValue } from "@shared/dates";
 const formSchema = z.object({
     searchQuery: z.string(),
     studentId: z.number(),
     date: z.string().min(1, "Date is required"),
-    duration: z.number().min(1, "Duration must be at least 1 day"),
+    durationMonths: z.number().min(1, "Duration is required"),
     amount: z.number().min(1, "Amount must be greater than 0"),
     paymentMethod: z.enum(["cash", "online"]),
 });
@@ -44,7 +45,7 @@ export default function Payments() {
             searchQuery: "",
             studentId: 0,
             date: new Date().toISOString().split("T")[0],
-            duration: 0,
+            durationMonths: 0,
             amount: 0,
             paymentMethod: "cash",
         },
@@ -105,7 +106,7 @@ export default function Payments() {
                 searchQuery: "",
                 studentId: 0,
                 date: new Date().toISOString().split("T")[0],
-                duration: 0,
+                durationMonths: 0,
                 amount: 0,
                 paymentMethod: "cash",
             });
@@ -126,11 +127,9 @@ export default function Payments() {
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
             ?.tokenNumber
         : undefined;
-    const getNewExpiryDate = (paymentDate, duration, currentExpiry) => {
+    const getNewExpiryDate = (paymentDate, durationMonths, currentExpiry) => {
         const baseDate = new Date(currentExpiry) > new Date(paymentDate) ? new Date(currentExpiry) : new Date(paymentDate);
-        const newDate = new Date(baseDate);
-        newDate.setDate(newDate.getDate() + duration);
-        return newDate;
+        return addCalendarMonths(baseDate, durationMonths);
     };
     const onSubmit = (data) => {
         if (!selectedStudent) {
@@ -143,7 +142,7 @@ export default function Payments() {
             registerNo: selectedStudent.registerNo,
             studentName: selectedStudent.name,
             phone: selectedStudent.phone,
-            duration: data.duration,
+            duration: data.durationMonths,
             amount: data.amount,
             paymentMethod: data.paymentMethod,
         });
@@ -188,13 +187,32 @@ export default function Payments() {
                       <FormMessage />
                     </FormItem>)}/>
 
-                <FormField control={form.control} name="duration" render={({ field }) => (<FormItem>
-                      <FormLabel>Membership Duration (Days) *</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="Enter number of days (e.g. 30)" value={field.value === 0 ? "" : field.value} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)} data-testid="input-duration"/>
-                      </FormControl>
+                <FormField control={form.control} name="durationMonths" render={({ field }) => (<FormItem>
+                      <FormLabel>Membership Duration *</FormLabel>
+                      <Select onValueChange={(v) => field.onChange(parseInt(v))} value={field.value ? String(field.value) : undefined}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-membership-duration">
+                            <SelectValue placeholder="Select duration"/>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1">1 Month</SelectItem>
+                          <SelectItem value="2">2 Months</SelectItem>
+                          <SelectItem value="3">3 Months</SelectItem>
+                          <SelectItem value="6">6 Months</SelectItem>
+                          <SelectItem value="12">1 Year</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>)}/>
+
+                {form.watch("date") && form.watch("durationMonths") > 0 && (<FormItem>
+                      <FormLabel>Expiry Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" value={toDateInputValue(getNewExpiryDate(form.watch("date"), form.watch("durationMonths"), selectedStudent?.expiryDate ?? ""))} readOnly data-testid="input-expiry-date"/>
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">Calculated automatically from the payment date and duration.</p>
+                    </FormItem>)}
 
                 <FormField control={form.control} name="amount" render={({ field }) => (<FormItem>
                       <FormLabel>Amount (₹) *</FormLabel>
@@ -265,17 +283,18 @@ export default function Payments() {
                   </p>
                 </div>
 
-                {form.watch("duration") > 0 && form.watch("date") && (<div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
+                {form.watch("durationMonths") > 0 && form.watch("date") && (<div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
                     <p className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">New Expiry Date</p>
                     <p className="font-bold text-lg text-green-900 dark:text-green-300">
-                      {getNewExpiryDate(form.watch("date"), form.watch("duration"), selectedStudent.expiryDate).toLocaleDateString("en-GB", {
+                      {getNewExpiryDate(form.watch("date"), form.watch("durationMonths"), selectedStudent.expiryDate).toLocaleDateString("en-GB", {
                     day: "2-digit",
                     month: "short",
                     year: "numeric"
                 }).replace(/ /g, "-")}
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-400 mt-1">
-                      {form.watch("duration")} days from payment date
+                      {form.watch("durationMonths")} month{form.watch("durationMonths") > 1 ? "s" : ""}{" "}
+                      from membership start date
                     </p>
                   </div>)}
               </div>) : (<div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">

@@ -15,6 +15,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertStudentSchema } from "@shared/schema";
+import { daysUntil, parseDateString } from "@shared/dates";
+import { useToday } from "@/hooks/use-today";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 const formSchema = insertStudentSchema.omit({ expiryDate: true, registerNo: true }).extend({
@@ -44,18 +46,20 @@ function MemberCard({ title, description, students, columns, getStatus, getDaysL
             case "Days Left":
                 return (<TableCell className={status === "Active"
                         ? "text-green-600 dark:text-green-400 font-medium"
-                        : status === "Pay Required"
+                        : status === "Pay Required" || status === "Expiring Today"
                             ? "text-orange-600 dark:text-orange-400 font-medium"
                             : "text-red-600 dark:text-red-400 font-medium"}>
-            Days: {getDaysLeft(student.expiryDate)}
+            Days Left: {getDaysLeft(student.expiryDate)}
           </TableCell>);
             case "Status":
                 return (<TableCell>
             <Badge variant={status === "Active" ? "default" : "destructive"} className={status === "Active"
                         ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                        : status === "Pay Required"
-                            ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"} data-testid={`badge-status-${student.id}`}>
+                        : status === "Expiring Today"
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                            : status === "Pay Required"
+                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                                : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"} data-testid={`badge-status-${student.id}`}>
               {status}
             </Badge>
           </TableCell>);
@@ -103,6 +107,8 @@ function MemberCard({ title, description, students, columns, getStatus, getDaysL
     </Card>);
 }
 export default function Students() {
+    const today = useToday();
+    const todayDate = parseDateString(today);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState(null);
     const [attendanceFeedback, setAttendanceFeedback] = useState(null);
@@ -254,22 +260,15 @@ export default function Students() {
     const getStatus = (expiryDate) => {
         if (!expiryDate)
             return "Pay Required";
-        const today = new Date();
-        const expiry = new Date(expiryDate);
-        if (expiry < today)
+        const remaining = daysUntil(expiryDate, todayDate);
+        if (remaining < 0)
             return "Expired";
-        const diff = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff <= 0)
-            return "Pay Required";
+        if (remaining === 0)
+            return "Expiring Today";
         return "Active";
     };
     const getDaysLeft = (expiryDate) => {
-        if (!expiryDate)
-            return 0;
-        const today = new Date();
-        const expiry = new Date(expiryDate);
-        const diff = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        return Math.max(0, diff);
+        return Math.max(0, daysUntil(expiryDate, todayDate));
     };
     const canCheckIn = (expiryDate) => {
         const daysLeft = getDaysLeft(expiryDate);
@@ -286,7 +285,7 @@ export default function Students() {
     const activeStudents = filteredStudents?.filter((s) => getStatus(s.expiryDate) === "Active");
     const expiredStudents = filteredStudents?.filter((s) => {
         const status = getStatus(s.expiryDate);
-        return status === "Expired" || status === "Pay Required";
+        return status === "Expired" || status === "Pay Required" || status === "Expiring Today";
     });
     return (<div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -330,7 +329,7 @@ export default function Students() {
             </TabsList>
 
             <TabsContent value="all" className="mt-4">
-              <MemberCard title="All Members" description={`${allStudents?.length ?? 0} total member(s)`} students={allStudents} columns={["Register No.", "Name", "Address", "Phone", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No members found. Add your first member to get started."/>
+              <MemberCard title="All Members" description={`${allStudents?.length ?? 0} total member(s)`} students={allStudents} columns={["Register No.", "Name", "Address", "Phone", "Join Date", "Expiry Date", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No members found. Add your first member to get started."/>
             </TabsContent>
 
             <TabsContent value="active" className="mt-4">
@@ -338,7 +337,7 @@ export default function Students() {
             </TabsContent>
 
             <TabsContent value="expired" className="mt-4">
-              <MemberCard title="Expired Members" description={`${expiredStudents?.length ?? 0} expired / unpaid member(s)`} students={expiredStudents} columns={["Register No.", "Name", "Phone", "Address", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No expired or unpaid members."/>
+              <MemberCard title="Expired Members" description={`${expiredStudents?.length ?? 0} expired / expiring today / unpaid member(s)`} students={expiredStudents} columns={["Register No.", "Name", "Phone", "Address", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No expired, expiring today, or unpaid members."/>
             </TabsContent>
           </Tabs>
         </div>)}
