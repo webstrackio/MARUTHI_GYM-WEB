@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -7,26 +8,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Receipt, MessageSquare, Copy } from "lucide-react";
+import { CreditCard, Receipt } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { useGymSettings } from "@/hooks/use-gym-settings";
-import { buildPaymentSms, buildSmsLink } from "@/lib/payment-sms";
+import { addCalendarMonths, toDateInputValue } from "@shared/dates";
 const formSchema = z.object({
     searchQuery: z.string(),
     studentId: z.number(),
     date: z.string().min(1, "Date is required"),
-    duration: z.number().min(1, "Duration must be at least 1 day"),
+    durationMonths: z.number().min(1, "Duration is required"),
     amount: z.number().min(1, "Amount must be greater than 0"),
     paymentMethod: z.enum(["cash", "online"]),
 });
 export default function Payments() {
+    const search = useSearch();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedStudent, setSelectedStudent] = useState(null);
-    const [smsReceipt, setSmsReceipt] = useState(null);
+    const autoSelectedRef = useRef(false);
     const { toast } = useToast();
     const { settings } = useGymSettings();
     const { data: students } = useQuery({
@@ -41,11 +42,25 @@ export default function Payments() {
             searchQuery: "",
             studentId: 0,
             date: new Date().toISOString().split("T")[0],
-            duration: 0,
+            durationMonths: 0,
             amount: 0,
             paymentMethod: "cash",
         },
     });
+    useEffect(() => {
+        if (autoSelectedRef.current || !students || !search)
+            return;
+        const studentId = Number(new URLSearchParams(search).get("studentId"));
+        if (!studentId)
+            return;
+        const student = students.find((s) => s.id === studentId);
+        if (student) {
+            autoSelectedRef.current = true;
+            setSelectedStudent(student);
+            setSearchQuery(student.name);
+            form.setValue("studentId", student.id);
+        }
+    }, [students, search]);
     const normalize = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
     const filteredStudents = students?.filter((s) => {
         const q = normalize(searchQuery);
@@ -68,19 +83,6 @@ export default function Payments() {
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
-            const student = students?.find((s) => s.id === variables.studentId);
-            const phone = student?.phone || variables.phone || "";
-            const endDate = getNewExpiryDate(variables.date, variables.duration, student?.expiryDate ?? "");
-            const message = buildPaymentSms({
-                studentName: variables.studentName,
-                amount: variables.amount,
-                duration: variables.duration,
-                paymentMethod: variables.paymentMethod,
-                startDate: variables.date,
-                endDate: endDate,
-                gymName: settings.name,
-            });
-            setSmsReceipt({ studentName: variables.studentName, phone, message });
             toast({ title: "Payment recorded successfully" });
             setSelectedStudent(null);
             setSearchQuery("");
@@ -88,7 +90,7 @@ export default function Payments() {
                 searchQuery: "",
                 studentId: 0,
                 date: new Date().toISOString().split("T")[0],
-                duration: 0,
+                durationMonths: 0,
                 amount: 0,
                 paymentMethod: "cash",
             });
@@ -109,11 +111,9 @@ export default function Payments() {
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
             ?.tokenNumber
         : undefined;
-    const getNewExpiryDate = (paymentDate, duration, currentExpiry) => {
+    const getNewExpiryDate = (paymentDate, durationMonths, currentExpiry) => {
         const baseDate = new Date(currentExpiry) > new Date(paymentDate) ? new Date(currentExpiry) : new Date(paymentDate);
-        const newDate = new Date(baseDate);
-        newDate.setDate(newDate.getDate() + duration);
-        return newDate;
+        return addCalendarMonths(baseDate, durationMonths);
     };
     const onSubmit = (data) => {
         if (!selectedStudent) {
@@ -126,7 +126,7 @@ export default function Payments() {
             registerNo: selectedStudent.registerNo,
             studentName: selectedStudent.name,
             phone: selectedStudent.phone,
-            duration: data.duration,
+            duration: data.durationMonths,
             amount: data.amount,
             paymentMethod: data.paymentMethod,
         });
@@ -171,13 +171,32 @@ export default function Payments() {
                       <FormMessage />
                     </FormItem>)}/>
 
-                <FormField control={form.control} name="duration" render={({ field }) => (<FormItem>
-                      <FormLabel>Membership Duration (Days) *</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="Enter number of days (e.g. 30)" value={field.value === 0 ? "" : field.value} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)} data-testid="input-duration"/>
-                      </FormControl>
+                <FormField control={form.control} name="durationMonths" render={({ field }) => (<FormItem>
+                      <FormLabel>Membership Duration *</FormLabel>
+                      <Select onValueChange={(v) => field.onChange(parseInt(v))} value={field.value ? String(field.value) : undefined}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-membership-duration">
+                            <SelectValue placeholder="Select duration"/>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1">1 Month</SelectItem>
+                          <SelectItem value="2">2 Months</SelectItem>
+                          <SelectItem value="3">3 Months</SelectItem>
+                          <SelectItem value="6">6 Months</SelectItem>
+                          <SelectItem value="12">1 Year</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>)}/>
+
+                {form.watch("date") && form.watch("durationMonths") > 0 && (<FormItem>
+                      <FormLabel>Expiry Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" value={toDateInputValue(getNewExpiryDate(form.watch("date"), form.watch("durationMonths"), selectedStudent?.expiryDate ?? ""))} readOnly data-testid="input-expiry-date"/>
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">Calculated automatically from the payment date and duration.</p>
+                    </FormItem>)}
 
                 <FormField control={form.control} name="amount" render={({ field }) => (<FormItem>
                       <FormLabel>Amount (₹) *</FormLabel>
@@ -248,17 +267,18 @@ export default function Payments() {
                   </p>
                 </div>
 
-                {form.watch("duration") > 0 && form.watch("date") && (<div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
+                {form.watch("durationMonths") > 0 && form.watch("date") && (<div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
                     <p className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">New Expiry Date</p>
                     <p className="font-bold text-lg text-green-900 dark:text-green-300">
-                      {getNewExpiryDate(form.watch("date"), form.watch("duration"), selectedStudent.expiryDate).toLocaleDateString("en-GB", {
+                      {getNewExpiryDate(form.watch("date"), form.watch("durationMonths"), selectedStudent.expiryDate).toLocaleDateString("en-GB", {
                     day: "2-digit",
                     month: "short",
                     year: "numeric"
                 }).replace(/ /g, "-")}
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-400 mt-1">
-                      {form.watch("duration")} days from payment date
+                      {form.watch("durationMonths")} month{form.watch("durationMonths") > 1 ? "s" : ""}{" "}
+                      from membership start date
                     </p>
                   </div>)}
               </div>) : (<div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
@@ -268,46 +288,5 @@ export default function Payments() {
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={smsReceipt !== null} onOpenChange={(open) => !open && setSmsReceipt(null)}>
-        <DialogContent className="max-w-lg" data-testid="dialog-sms-receipt">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-green-500"/>
-              Payment Receipt SMS
-            </DialogTitle>
-            <DialogDescription>
-              Send this receipt as a normal SMS to {smsReceipt?.studentName}{" "}
-              {smsReceipt?.phone ? `(+91 ${smsReceipt.phone})` : ""}
-            </DialogDescription>
-          </DialogHeader>
-          {smsReceipt && (<div className="space-y-4">
-              <div className="p-4 rounded-lg bg-gray-100 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800">
-                <pre className="whitespace-pre-wrap text-sm text-foreground font-sans">
-                  {smsReceipt.message}
-                </pre>
-              </div>
-
-              <DialogFooter className="gap-2 sm:justify-start">
-                {smsReceipt.phone ? (<a href={buildSmsLink(smsReceipt.phone, smsReceipt.message)} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 transition-all duration-150 hover-elevate active-elevate-2 min-h-9 px-4 py-2 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white" data-testid="button-send-sms">
-                    <MessageSquare className="h-4 w-4"/>
-                    Send SMS
-                  </a>) : (<p className="text-sm text-muted-foreground">
-                    No mobile number on file for this student.
-                  </p>)}
-                <Button variant="outline" onClick={() => {
-                navigator.clipboard.writeText(smsReceipt.message);
-                toast({ title: "Message copied to clipboard" });
-            }} data-testid="button-copy-sms">
-                  <Copy className="h-4 w-4"/>
-                  Copy Message
-                </Button>
-                <Button variant="ghost" onClick={() => setSmsReceipt(null)} data-testid="button-close-sms">
-                  Close
-                </Button>
-              </DialogFooter>
-            </div>)}
-        </DialogContent>
-      </Dialog>
     </div>);
 }

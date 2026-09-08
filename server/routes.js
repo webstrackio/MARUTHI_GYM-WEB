@@ -1,6 +1,7 @@
 import { createServer } from "http";
 import { storage } from "./storage.js";
 import { insertStudentSchema, insertPaymentSchema } from "../shared/schema.js";
+import { addCalendarMonths, toDateInputValue, daysUntil } from "../shared/dates.js";
 export async function registerRoutes(app) {
     // Dashboard stats
     app.get("/api/dashboard/stats", async (_req, res) => {
@@ -121,25 +122,31 @@ export async function registerRoutes(app) {
     app.post("/api/payments", async (req, res) => {
         try {
             const tokenNumber = `TKN-${Date.now()}`;
-            const validatedData = insertPaymentSchema.parse({
-                ...req.body,
-                tokenNumber,
-            });
-            const payment = await storage.createPayment(validatedData);
-            // Update student's expiry date based on payment duration.
-            // Start from the later of the current expiry or the payment date,
-            // so renewing while active extends the membership correctly.
-            const student = await storage.getStudentById(validatedData.studentId);
+            // Duration is a whole number of calendar months (1, 2, 3, 6, 12 ...)
+            const durationMonths = Number(req.body.duration);
+            if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > 120) {
+                return res.status(400).json({ error: "Duration must be a whole number of months (1 - 120)" });
+            }
+            const student = await storage.getStudentById(req.body.studentId);
             if (!student) {
                 return res.status(404).json({ error: "Student not found" });
             }
-            const baseDate = student.expiryDate && new Date(student.expiryDate) > new Date(validatedData.date)
+            // Membership extends from the later of the current expiry or the
+            // payment/start date, then adds whole calendar months.
+            const baseDate = student.expiryDate && new Date(student.expiryDate) > new Date(req.body.date)
                 ? new Date(student.expiryDate)
-                : new Date(validatedData.date);
-            const expiryDate = new Date(baseDate);
-            expiryDate.setDate(expiryDate.getDate() + validatedData.duration);
+                : new Date(req.body.date);
+            const expiryDate = toDateInputValue(addCalendarMonths(baseDate, durationMonths));
+            const validatedData = insertPaymentSchema.parse({
+                ...req.body,
+                duration: durationMonths,
+                startDate: req.body.startDate || req.body.date,
+                expiryDate,
+                tokenNumber,
+            });
+            const payment = await storage.createPayment(validatedData);
             await storage.updateStudent(validatedData.studentId, {
-                expiryDate: expiryDate.toISOString().split("T")[0],
+                expiryDate,
             });
             res.status(201).json(payment);
         }
@@ -159,7 +166,14 @@ export async function registerRoutes(app) {
             if (!payment) {
                 return res.status(404).json({ error: "Payment not found" });
             }
+            if (req.body.duration !== undefined) {
+                const durationMonths = Number(req.body.duration);
+                if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > 120) {
+                    return res.status(400).json({ error: "Duration must be a whole number of months (1 - 120)" });
+                }
+            }
             const updatedPayment = await storage.updatePayment(id, req.body);
+            await storage.recomputeStudentExpiry(updatedPayment.studentId);
             res.json(updatedPayment);
         }
         catch (error) {
@@ -175,6 +189,7 @@ export async function registerRoutes(app) {
                 return res.status(404).json({ error: "Payment not found" });
             }
             await storage.deletePayment(id);
+            await storage.recomputeStudentExpiry(payment.studentId);
             res.status(204).send();
         }
         catch (error) {
@@ -231,17 +246,9 @@ export async function registerRoutes(app) {
                     isExpired: false
                 });
             }
-            // Step 2: Calculate days left
+            // Step 2: Calculate days left (calendar dates, never negative)
             const now = new Date();
-            let daysLeft = 0;
-            if (student.expiryDate) {
-                const expiryDate = new Date(student.expiryDate);
-                // Calculate full days remaining
-                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const expiryStart = new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate());
-                const daysDiff = Math.ceil((expiryStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
-                daysLeft = daysDiff;
-            }
+            const daysLeft = Math.max(0, daysUntil(student.expiryDate));
             // Expired if: no expiry date OR days left <= 0
             const isExpired = !student.expiryDate || daysLeft <= 0;
             // Step 3: Check if expired FIRST - don't insert for expired members

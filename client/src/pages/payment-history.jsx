@@ -106,7 +106,7 @@ export default function PaymentHistory() {
                       <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
                       <TableCell>{payment.registerNo}</TableCell>
                       <TableCell>{payment.studentName}</TableCell>
-                      <TableCell>{payment.duration} days</TableCell>
+                      <TableCell>{payment.duration} month{payment.duration > 1 ? "s" : ""}</TableCell>
                       <TableCell>
                         <div className={`flex items-center gap-2 w-fit px-3 py-1 rounded-md ${payment.paymentMethod === "cash"
                     ? "bg-green-100 dark:bg-green-900/30"

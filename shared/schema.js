@@ -26,10 +26,12 @@ export const payments = pgTable("payments", {
     id: serial("id").primaryKey(),
     tokenNumber: varchar("token_number", { length: 50 }).notNull().unique(),
     date: date("date").notNull(),
+    startDate: date("start_date"),
+    expiryDate: date("expiry_date"),
     studentId: integer("student_id").notNull(),
     registerNo: varchar("register_no", { length: 50 }).notNull(),
     studentName: text("student_name").notNull(),
-    duration: integer("duration").notNull(), // days
+    duration: integer("duration").notNull(), // in calendar months
     amount: integer("amount").notNull(), // in rupees
     paymentMethod: varchar("payment_method", { length: 20 }).notNull(), // 'cash' or 'online'
     createdAt: timestamp("created_at").defaultNow().notNull(),

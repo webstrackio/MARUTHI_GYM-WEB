@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { useToast } from "@/hooks/use-toast";
 import { loginAsAdmin, loginAsStudent, logout, useRole } from "@/lib/auth";
-import { ShieldCheck, LogOut, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { ShieldCheck, LogOut, Mail, Lock, User, Eye, EyeOff, Settings } from "lucide-react";
 export default function Admin() {
     const { settings } = useGymSettings();
     const { toast } = useToast();
@@ -16,27 +16,20 @@ export default function Admin() {
     const [, navigate] = useLocation();
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
-    const ownerConfigured = Boolean(settings.ownerPassword);
-    const handleAdminLogin = (e) => {
+
+    const handleAdminLogin = async (e) => {
         e.preventDefault();
-        if (!ownerConfigured) {
-            toast({
-                title: "Owner details not configured",
-                description: "Please set the owner password in Settings first.",
-                variant: "destructive",
-            });
-            return;
-        }
         if (password === settings.ownerPassword) {
             loginAsAdmin();
             setPassword("");
-            toast({ title: "Logged in successfully", description: `Welcome, owner of ${settings.name || "Gym"}` });
+            toast({ title: "Logged in successfully", description: `Welcome back, owner of ${settings.name || "Gym"}` });
             navigate("/");
         }
         else {
             toast({ title: "Invalid credentials", description: "Password does not match.", variant: "destructive" });
         }
     };
+
     const handleStudentLogin = () => {
         loginAsStudent({
             id: 0,
@@ -124,15 +117,8 @@ export default function Admin() {
                 </TabsList>
 
                 <TabsContent value="admin" className="space-y-4">
-                  {!ownerConfigured ? (<div className="space-y-4">
-                      <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-300">
-                        Owner password is not set yet. Please go to Settings and
-                        save it before logging in.
-                      </div>
-                      <Button variant="outline" className="w-full" asChild>
-                        <Link href="/settings">Go to Settings</Link>
-                      </Button>
-                    </div>) : (<form onSubmit={handleAdminLogin} className="space-y-4">
+                  {settings.ownerPassword ? (<form onSubmit={handleAdminLogin} className="space-y-4">
+                      
                       <div className="space-y-2">
                         <Label htmlFor="admin-password">Enter Password</Label>
                         <div className="relative">
@@ -145,7 +131,11 @@ export default function Admin() {
                       <Button type="submit" className="w-full" data-testid="button-admin-login">
                         Login as Owner
                       </Button>
-                    </form>)}
+                      </form>): (<div className="space-y-4">
+                      <Button variant="outline" className="w-full" asChild>
+                        <Link href="/settings"><Settings className="mr-2 h-4 w-4"/> Go to Settings</Link>
+                      </Button>
+                    </div>)}
                 </TabsContent>
 
                 <TabsContent value="student" className="space-y-4">
