@@ -1,4 +1,5 @@
 import { storage } from "../../server/lib/storage.js";
+import { normalizeBatch } from "../../shared/schema.js";
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -20,7 +21,14 @@ export default async function handler(req, res) {
       if (!student) {
         return res.status(404).json({ error: "Student not found" });
       }
-      const updatedStudent = await storage.updateStudent(parseInt(id), req.body);
+      const allowedFields = {};
+      if (req.body.name !== undefined) allowedFields.name = req.body.name;
+      if (req.body.phone !== undefined) allowedFields.phone = req.body.phone;
+      if (req.body.address !== undefined) allowedFields.address = req.body.address;
+      if (req.body.joinDate !== undefined) allowedFields.joinDate = req.body.joinDate;
+      if (req.body.expiryDate !== undefined) allowedFields.expiryDate = req.body.expiryDate;
+      if (req.body.batch !== undefined) allowedFields.batch = normalizeBatch(req.body.batch);
+      const updatedStudent = await storage.updateStudent(parseInt(id), allowedFields);
       res.json(updatedStudent);
     } catch (error) {
       console.error(`PATCH /api/students/${id} failed:`, error);

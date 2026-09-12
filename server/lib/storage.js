@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq, sql } from "drizzle-orm";
-import { students, payments, attendance } from "../../shared/schema.js";
+import { students, payments, attendance, normalizeBatch } from "../../shared/schema.js";
 import { addCalendarMonths, toDateInputValue } from "../../shared/dates.js";
 
 const client = postgres(process.env.DATABASE_URL, {
@@ -10,17 +10,20 @@ const client = postgres(process.env.DATABASE_URL, {
 });
 const db = drizzle(client);
 
+const normalizeStudent = (row) => (row ? { ...row, batch: normalizeBatch(row.batch) } : row);
+
 export class DrizzleStorage {
   async getStudents() {
-    return db.select().from(students).orderBy(sql`${students.id} desc`);
+    const rows = await db.select().from(students).orderBy(sql`${students.id} desc`);
+    return rows.map(normalizeStudent);
   }
   async getStudentById(id) {
     const result = await db.select().from(students).where(eq(students.id, id));
-    return result[0];
+    return normalizeStudent(result[0]);
   }
   async getStudentByRegisterNo(registerNo) {
     const result = await db.select().from(students).where(eq(students.registerNo, registerNo));
-    return result[0];
+    return normalizeStudent(result[0]);
   }
   async getNextRegisterNo() {
     const allStudents = await db.select().from(students);
@@ -32,11 +35,11 @@ export class DrizzleStorage {
   }
   async createStudent(student) {
     const result = await db.insert(students).values(student).returning();
-    return result[0];
+    return normalizeStudent(result[0]);
   }
   async updateStudent(id, student) {
     const result = await db.update(students).set(student).where(eq(students.id, id)).returning();
-    return result[0];
+    return normalizeStudent(result[0]);
   }
   async deleteStudent(id) {
     await db.delete(students).where(eq(students.id, id));

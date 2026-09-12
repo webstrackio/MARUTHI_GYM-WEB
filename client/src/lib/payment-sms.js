@@ -17,9 +17,10 @@ export function buildPaymentSms(input) {
     const methodLabel = input.paymentMethod === "cash" ? "Cash" : "Online";
     const gymName = input.gymName || "Gym";
     const ownerContact = gymName;
+    const formattedAmount = (Number(input.amount) || 0).toLocaleString("en-IN");
     return [
         `Dear ${input.studentName},`,
-        `Paid amount for the gym Rs.${input.amount}`,
+        `Paid amount for the gym Rs.${formattedAmount}`,
         `${formatPlanLabel(input.duration)} plan via ${methodLabel}`,
         `Start Date: ${formatSmsDate(input.startDate)}`,
         `End Date: ${formatSmsDate(input.endDate)}`,

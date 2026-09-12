@@ -1,6 +1,6 @@
 import { createServer } from "http";
 import { storage } from "./storage.js";
-import { insertStudentSchema, insertPaymentSchema } from "../shared/schema.js";
+import { insertStudentSchema, insertPaymentSchema, normalizeBatch } from "../shared/schema.js";
 import { addCalendarMonths, toDateInputValue, daysUntil } from "../shared/dates.js";
 export async function registerRoutes(app) {
     // Dashboard stats
@@ -65,6 +65,7 @@ export async function registerRoutes(app) {
             const validatedData = insertStudentSchema.parse({
                 ...req.body,
                 registerNo,
+                batch: normalizeBatch(req.body.batch),
             });
             const student = await storage.createStudent(validatedData);
             res.status(201).json(student);
@@ -85,7 +86,14 @@ export async function registerRoutes(app) {
             if (!student) {
                 return res.status(404).json({ error: "Student not found" });
             }
-            const updatedStudent = await storage.updateStudent(id, req.body);
+            const allowedFields = {};
+            if (req.body.name !== undefined) allowedFields.name = req.body.name;
+            if (req.body.phone !== undefined) allowedFields.phone = req.body.phone;
+            if (req.body.address !== undefined) allowedFields.address = req.body.address;
+            if (req.body.joinDate !== undefined) allowedFields.joinDate = req.body.joinDate;
+            if (req.body.expiryDate !== undefined) allowedFields.expiryDate = req.body.expiryDate;
+            if (req.body.batch !== undefined) allowedFields.batch = normalizeBatch(req.body.batch);
+            const updatedStudent = await storage.updateStudent(id, allowedFields);
             res.json(updatedStudent);
         }
         catch (error) {

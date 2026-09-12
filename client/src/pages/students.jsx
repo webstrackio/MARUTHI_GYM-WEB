@@ -10,20 +10,22 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Users, LogIn, AlertCircle, CheckCircle, Search } from "lucide-react";
+import { Plus, Pencil, Users, LogIn, AlertCircle, CheckCircle, Search, Sun, Moon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertStudentSchema } from "@shared/schema";
+import { insertStudentSchema, normalizeBatch } from "@shared/schema";
 import { daysUntil, parseDateString } from "@shared/dates";
 import { useToday } from "@/hooks/use-today";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 const formSchema = insertStudentSchema.omit({ expiryDate: true, registerNo: true }).extend({
     registerNo: z.string().optional(),
     name: z.string().min(1, "Name is required").regex(/^[A-Za-z][A-Za-z .'-]*$/, "Name must contain only letters"),
     phone: z.string().regex(/^[0-9]{10}$/, "Phone number must be exactly 10 digits"),
     address: z.string().min(1, "Address is required"),
+    batch: z.enum(["morning", "evening"]),
 });
 function MemberCard({ title, description, students, columns, getStatus, getDaysLeft, canCheckIn, onCheckIn, onEdit, isCheckInPending, emptyText, }) {
     const renderCell = (column, student) => {
@@ -42,6 +44,14 @@ function MemberCard({ title, description, students, columns, getStatus, getDaysL
             case "Expiry Date":
                 return (<TableCell>
             {student.expiryDate ? new Date(student.expiryDate).toLocaleDateString() : "-"}
+          </TableCell>);
+            case "Batch":
+                return (<TableCell>
+            <Badge variant="outline" className={normalizeBatch(student.batch) === "morning"
+                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-700"
+                        : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700"}>
+              {normalizeBatch(student.batch) === "morning" ? "Morning" : "Evening"}
+            </Badge>
           </TableCell>);
             case "Days Left":
                 return (<TableCell className={status === "Active"
@@ -128,6 +138,7 @@ export default function Students() {
         return "all";
     });
     const [searchQuery, setSearchQuery] = useState("");
+    const [selectedBatch, setSelectedBatch] = useState("all");
     const form = useForm({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -136,14 +147,15 @@ export default function Students() {
             phone: "",
             address: "",
             joinDate: new Date().toISOString().split("T")[0],
+            batch: "morning",
         },
     });
     const createMutation = useMutation({
         mutationFn: (data) => apiRequest("POST", "/api/students", data),
         onSuccess: async (response) => {
             const createdStudent = await response.json();
-            queryClient.invalidateQueries({ queryKey: ["/api/students"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+            await queryClient.invalidateQueries({ queryKey: ["/api/students"] });
+            await queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             toast({ title: "Student added successfully" });
             setIsDialogOpen(false);
             form.reset();
@@ -155,9 +167,10 @@ export default function Students() {
     });
     const updateMutation = useMutation({
         mutationFn: ({ id, ...data }) => apiRequest("PATCH", `/api/students/${id}`, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/students"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["/api/students"] });
+            await queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+            await queryClient.refetchQueries({ queryKey: ["/api/students"] });
             toast({ title: "Student updated successfully" });
             setIsDialogOpen(false);
             setEditingStudent(null);
@@ -227,6 +240,7 @@ export default function Students() {
                 phone: student.phone,
                 address: student.address,
                 joinDate: student.joinDate,
+                batch: normalizeBatch(student.batch),
             });
         }
         else {
@@ -237,6 +251,7 @@ export default function Students() {
                 phone: "",
                 address: "",
                 joinDate: new Date().toISOString().split("T")[0],
+                batch: selectedBatch === "all" ? "morning" : selectedBatch,
             });
             try {
                 const res = await apiRequest("GET", "/api/students/next-register-no");
@@ -274,8 +289,14 @@ export default function Students() {
         const daysLeft = getDaysLeft(expiryDate);
         return daysLeft > 0;
     };
+    const batchLabel = selectedBatch === "morning" ? "Morning Batch" : selectedBatch === "evening" ? "Evening Batch" : "All Batches";
     const searchLower = searchQuery.trim().toLowerCase();
-    const filteredStudents = students?.filter((s) => {
+    const batchFilteredStudents = students?.filter((s) => {
+        if (selectedBatch === "all")
+            return true;
+        return normalizeBatch(s.batch) === selectedBatch;
+    });
+    const filteredStudents = batchFilteredStudents?.filter((s) => {
         if (!searchLower)
             return true;
         return (s.name.toLowerCase().includes(searchLower) ||
@@ -287,63 +308,105 @@ export default function Students() {
         const status = getStatus(s.expiryDate);
         return status === "Expired" || status === "Pay Required" || status === "Expiring Today";
     });
-    return (<div className="space-y-6">
-      <div className="flex items-center justify-between">
+    return (<div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Students</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage gym members</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {statusFilter && (<Button variant="outline" onClick={() => {
                 setActiveTab("all");
                 navigate("/students");
             }} data-testid="button-show-all-students">
               Show All
             </Button>)}
-          <Button onClick={() => handleOpenDialog()} data-testid="button-add-student">
+          <Button onClick={() => handleOpenDialog()} data-testid="button-add-student" className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4"/>
             Add Student
           </Button>
         </div>
       </div>
 
+      {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
         <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search members by name or register number..." className="pl-10" data-testid="input-search-students"/>
       </div>
 
+      {/* Batch Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <span className="text-sm font-bold text-foreground">Batch:</span>
+        <div className="flex flex-1 sm:flex-none rounded-full border bg-muted p-1 gap-1">
+          <button
+            onClick={() => setSelectedBatch("all")}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-full px-3 sm:px-4 py-1.5 text-sm font-medium transition-all duration-150 active:scale-95 ${selectedBatch === "all"
+              ? "bg-foreground text-background shadow-sm"
+              : "text-muted-foreground hover:text-foreground"}`}
+            data-testid="button-batch-all"
+          >
+            <span>All</span>
+          </button>
+          <button
+            onClick={() => setSelectedBatch("morning")}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-full px-3 sm:px-4 py-1.5 text-sm font-medium transition-all duration-150 active:scale-95 ${selectedBatch === "morning"
+              ? "bg-orange-500 text-white shadow-sm"
+              : "text-muted-foreground hover:text-foreground"}`}
+            data-testid="button-batch-morning"
+          >
+            <Sun className="h-3.5 w-3.5"/>
+            <span className="hidden xs:inline">Morning Batch</span>
+            <span className="xs:hidden">Morning</span>
+          </button>
+          <button
+            onClick={() => setSelectedBatch("evening")}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-full px-3 sm:px-4 py-1.5 text-sm font-medium transition-all duration-150 active:scale-95 ${selectedBatch === "evening"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-muted-foreground hover:text-foreground"}`}
+            data-testid="button-batch-evening"
+          >
+            <Moon className="h-3.5 w-3.5"/>
+            <span className="hidden xs:inline">Evening Batch</span>
+            <span className="xs:hidden">Evening</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
       {isLoading ? (<div className="space-y-3">
           {[...Array(5)].map((_, i) => (<Skeleton key={i} className="h-12 w-full"/>))}
-        </div>) : (<div className="space-y-6">
+        </div>) : (<div className="space-y-4 sm:space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="inline-flex h-auto w-auto gap-1 rounded-full border bg-muted p-1">
-              <TabsTrigger value="all" data-testid="tab-students-all" className="rounded-full px-3 py-1 text-sm">
+            <TabsList className="flex sm:inline-flex h-auto w-full sm:w-auto gap-1 rounded-full border bg-muted p-1">
+              <TabsTrigger value="all" data-testid="tab-students-all" className="flex-1 sm:flex-none rounded-full px-3 py-1 text-sm">
                 All
               </TabsTrigger>
-              <TabsTrigger value="active" data-testid="tab-students-active" className="rounded-full px-3 py-1 text-sm">
+              <TabsTrigger value="active" data-testid="tab-students-active" className="flex-1 sm:flex-none rounded-full px-3 py-1 text-sm">
                 Active
               </TabsTrigger>
-              <TabsTrigger value="expired" data-testid="tab-students-expired" className="rounded-full px-3 py-1 text-sm">
+              <TabsTrigger value="expired" data-testid="tab-students-expired" className="flex-1 sm:flex-none rounded-full px-3 py-1 text-sm">
                 Expired
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-4">
-              <MemberCard title="All Members" description={`${allStudents?.length ?? 0} total member(s)`} students={allStudents} columns={["Register No.", "Name", "Address", "Phone", "Join Date", "Expiry Date", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No members found. Add your first member to get started."/>
+              <MemberCard title={`All Members \u2014 ${batchLabel}`} description={`${allStudents?.length ?? 0} total member(s)`} students={allStudents} columns={["Register No.", "Name", "Batch", "Address", "Phone", "Join Date", "Expiry Date", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No members found. Add your first member to get started."/>
             </TabsContent>
 
             <TabsContent value="active" className="mt-4">
-              <MemberCard title="Active Members" description={`${activeStudents?.length ?? 0} active member(s)`} students={activeStudents} columns={["Register No.", "Name", "Phone", "Address", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No active members right now."/>
+              <MemberCard title={`Active Members \u2014 ${batchLabel}`} description={`${activeStudents?.length ?? 0} active member(s)`} students={activeStudents} columns={["Register No.", "Name", "Batch", "Phone", "Address", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No active members right now."/>
             </TabsContent>
 
             <TabsContent value="expired" className="mt-4">
-              <MemberCard title="Expired Members" description={`${expiredStudents?.length ?? 0} expired / expiring today / unpaid member(s)`} students={expiredStudents} columns={["Register No.", "Name", "Phone", "Address", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No expired, expiring today, or unpaid members."/>
+              <MemberCard title={`Expired Members \u2014 ${batchLabel}`} description={`${expiredStudents?.length ?? 0} expired / expiring today / unpaid member(s)`} students={expiredStudents} columns={["Register No.", "Name", "Batch", "Phone", "Address", "Join Date", "Expiry Date", "Days Left", "Status", "Actions"]} getStatus={getStatus} getDaysLeft={getDaysLeft} canCheckIn={canCheckIn} onCheckIn={(registerNo) => attendanceMutation.mutate(registerNo)} onEdit={handleOpenDialog} isCheckInPending={attendanceMutation.isPending} emptyText="No expired, expiring today, or unpaid members."/>
             </TabsContent>
           </Tabs>
         </div>)}
 
+      {/* Add/Edit Student Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent data-testid="dialog-student-form">
+        <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg w-[calc(100%-2rem)] sm:w-full" data-testid="dialog-student-form">
           <DialogHeader>
             <DialogTitle>{editingStudent ? "Edit Student" : "Add New Student"}</DialogTitle>
             <DialogDescription>
@@ -352,14 +415,33 @@ export default function Students() {
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField control={form.control} name="registerNo" render={({ field }) => (<FormItem>
                     <FormLabel>Register Number <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
                       <Input {...field} disabled readOnly placeholder="Auto-generated" data-testid="input-register-no"/>
                     </FormControl>
-                    <p className="text-xs text-muted-foreground">Auto-generated by the system. Cannot be edited.</p>
+                    <p className="text-xs text-muted-foreground">Auto-generated by the system.</p>
                     <FormMessage />
                   </FormItem>)}/>
+              <FormField control={form.control} name="batch" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Batch <span className="text-red-500">*</span></FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-batch">
+                            <SelectValue placeholder="Select Batch"/>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="morning">Morning Batch</SelectItem>
+                          <SelectItem value="evening">Evening Batch</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}/>
+              </div>
               <FormField control={form.control} name="name" render={({ field }) => (<FormItem>
                     <FormLabel>Full Name <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
@@ -367,17 +449,11 @@ export default function Students() {
                     </FormControl>
                     <FormMessage />
                   </FormItem>)}/>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField control={form.control} name="phone" render={({ field }) => (<FormItem>
                     <FormLabel>Phone <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
                       <Input {...field} inputMode="numeric" maxLength={10} placeholder="10 digit mobile number" onChange={(e) => field.onChange(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))} data-testid="input-phone"/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>)}/>
-              <FormField control={form.control} name="address" render={({ field }) => (<FormItem>
-                    <FormLabel>Address <span className="text-red-500">*</span></FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter address" {...field} data-testid="input-address"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>)}/>
@@ -388,8 +464,16 @@ export default function Students() {
                     </FormControl>
                     <FormMessage />
                   </FormItem>)}/>
+              </div>
+              <FormField control={form.control} name="address" render={({ field }) => (<FormItem>
+                    <FormLabel>Address <span className="text-red-500">*</span></FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter address" {...field} data-testid="input-address"/>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>)}/>
               <DialogFooter>
-                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-submit-student">
+                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-submit-student" className="w-full sm:w-auto">
                   {createMutation.isPending || updateMutation.isPending ? "Saving..." : editingStudent ? "Update" : "Add Student"}
                 </Button>
               </DialogFooter>
@@ -398,8 +482,9 @@ export default function Students() {
         </DialogContent>
       </Dialog>
 
+      {/* Attendance Feedback Dialog */}
       <Dialog open={attendanceFeedback !== null} onOpenChange={(open) => !open && setAttendanceFeedback(null)}>
-        <DialogContent className="max-w-md" data-testid={`feedback-${attendanceFeedback?.type}`}>
+        <DialogContent className="max-w-md w-[calc(100%-2rem)] sm:w-full" data-testid={`feedback-${attendanceFeedback?.type}`}>
           {attendanceFeedback && (<div className="space-y-6">
               <div className="text-center">
                 {attendanceFeedback.type === "success" ? (<div className="space-y-3">

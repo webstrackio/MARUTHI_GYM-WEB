@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "
 import { Input } from "@/components/ui/input";
 import { TrendingUp, Search, History, Banknote, CreditCard } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency } from "@/lib/utils";
 export default function PaymentHistory() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -44,7 +45,7 @@ export default function PaymentHistory() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-orange-900 dark:text-orange-100" data-testid="text-selected-month-total">
-              ₹ {selectedMonthTotal}
+              {formatCurrency(selectedMonthTotal)}
             </p>
           </CardContent>
         </Card>
@@ -63,7 +64,7 @@ export default function PaymentHistory() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-green-900 dark:text-green-100" data-testid="text-overall-total-income">
-              ₹ {overallTotal}
+              {formatCurrency(overallTotal)}
             </p>
           </CardContent>
         </Card>
@@ -119,7 +120,7 @@ export default function PaymentHistory() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">₹ {payment.amount}</TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(payment.amount)}</TableCell>
                     </motion.tr>))}
                 </TableBody>
               </Table>

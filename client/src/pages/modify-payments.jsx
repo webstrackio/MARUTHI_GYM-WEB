@@ -15,6 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
+import { formatCurrency } from "@/lib/utils";
 const editPaymentSchema = z.object({
     date: z.string().min(1, "Date is required"),
     durationMonths: z.number().min(1, "Duration is required"),
@@ -129,7 +130,7 @@ export default function ModifyPayments() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">₹ {payment.amount}</TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(payment.amount)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(payment)} data-testid={`button-edit-${payment.id}`}>

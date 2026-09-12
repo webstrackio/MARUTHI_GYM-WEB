@@ -10,8 +10,16 @@ export const students = pgTable("students", {
     address: text("address").notNull(),
     joinDate: date("join_date").notNull(),
     expiryDate: date("expiry_date"),
+    batch: varchar("batch", { length: 20 }).notNull().default("morning"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+export function normalizeBatch(value) {
+    if (value === null || value === undefined) {
+        return "morning";
+    }
+    const key = String(value).trim().toLowerCase();
+    return key.includes("evening") ? "evening" : "morning";
+}
 export const insertStudentSchema = createInsertSchema(students).omit({
     id: true,
     createdAt: true,
@@ -20,6 +28,7 @@ export const insertStudentSchema = createInsertSchema(students).omit({
     name: z.string().min(1, "Name is required").regex(/^[A-Za-z][A-Za-z .'-]*$/, "Name must contain only letters"),
     phone: z.string().regex(/^[0-9]{10}$/, "Phone number must be exactly 10 digits"),
     address: z.string().min(1, "Address is required"),
+    batch: z.enum(["morning", "evening"]).default("morning"),
 });
 // Payments table
 export const payments = pgTable("payments", {
