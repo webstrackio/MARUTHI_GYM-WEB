@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Wallet, CreditCard, TrendingUp, Calendar, DollarSign } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency, formatIndianNumber } from "@/lib/utils";
 export default function IncomeDashboard() {
     const { data: stats, isLoading } = useQuery({
         queryKey: ["/api/income/stats"],
@@ -34,7 +35,7 @@ export default function IncomeDashboard() {
             </CardHeader>
             <CardContent>
               {isLoading ? (<Skeleton className="h-10 w-32"/>) : (<p className="text-3xl font-bold text-green-900 dark:text-green-100" data-testid="text-cash-in-hand">
-                  ₹ {stats?.cashInHand ?? 0}
+                  {formatCurrency(stats?.cashInHand ?? 0)}
                 </p>)}
             </CardContent>
           </Card>
@@ -57,7 +58,7 @@ export default function IncomeDashboard() {
             </CardHeader>
             <CardContent>
               {isLoading ? (<Skeleton className="h-10 w-32"/>) : (<p className="text-3xl font-bold text-blue-900 dark:text-blue-100" data-testid="text-online-payments">
-                  ₹ {stats?.onlinePayments ?? 0}
+                  {formatCurrency(stats?.onlinePayments ?? 0)}
                 </p>)}
             </CardContent>
           </Card>
@@ -82,7 +83,7 @@ export default function IncomeDashboard() {
             </CardHeader>
             <CardContent>
               {isLoading ? (<Skeleton className="h-10 w-32"/>) : (<p className="text-3xl font-bold text-orange-900 dark:text-orange-100" data-testid="text-this-month-income">
-                  ₹ {stats?.thisMonthIncome ?? 0}
+                  {formatCurrency(stats?.thisMonthIncome ?? 0)}
                 </p>)}
             </CardContent>
           </Card>
@@ -105,7 +106,7 @@ export default function IncomeDashboard() {
             </CardHeader>
             <CardContent>
               {isLoading ? (<Skeleton className="h-10 w-32"/>) : (<p className="text-3xl font-bold text-blue-900 dark:text-blue-100" data-testid="text-this-year-income">
-                  ₹ {stats?.thisYearIncome ?? 0}
+                  {formatCurrency(stats?.thisYearIncome ?? 0)}
                 </p>)}
             </CardContent>
           </Card>
@@ -128,7 +129,7 @@ export default function IncomeDashboard() {
             </CardHeader>
             <CardContent>
               {isLoading ? (<Skeleton className="h-10 w-32"/>) : (<p className="text-3xl font-bold text-green-900 dark:text-green-100" data-testid="text-total-overall-income">
-                  ₹ {stats?.totalOverallIncome ?? 0}
+                  {formatCurrency(stats?.totalOverallIncome ?? 0)}
                 </p>)}
             </CardContent>
           </Card>
@@ -152,7 +153,7 @@ export default function IncomeDashboard() {
                     </div>
                     <p className="text-2xl font-bold text-foreground flex items-center gap-1">
                       <span className="text-green-600">₹</span>
-                      {month.amount}
+                      {formatIndianNumber(month.amount)}
                     </p>
                   </CardContent>
                 </Card>))}
@@ -174,7 +175,7 @@ export default function IncomeDashboard() {
             <CardContent>
               {isLoading ? (<Skeleton className="h-10 w-32"/>) : (<p className="text-3xl font-bold text-black dark:text-white flex items-center gap-1" data-testid="text-avg-monthly-income">
                   <span className="text-green-600">₹</span>
-                  {stats?.averageMonthlyIncome ?? 0}
+                  {formatIndianNumber(stats?.averageMonthlyIncome ?? 0)}
                 </p>)}
             </CardContent>
           </Card>

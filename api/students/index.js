@@ -1,5 +1,5 @@
 import { storage } from "../../server/lib/storage.js";
-import { insertStudentSchema } from "../../shared/schema.js";
+import { insertStudentSchema, normalizeBatch } from "../../shared/schema.js";
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
@@ -24,6 +24,7 @@ export default async function handler(req, res) {
       const validatedData = insertStudentSchema.parse({
         ...req.body,
         registerNo,
+        batch: normalizeBatch(req.body.batch),
       });
       const student = await storage.createStudent(validatedData);
       res.status(201).json(student);

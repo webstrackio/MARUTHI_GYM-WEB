@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useGymSettings } from "@/hooks/use-gym-settings";
+import { normalizeBatch } from "@shared/schema";
 import { addCalendarMonths, toDateInputValue } from "@shared/dates";
 const formSchema = z.object({
     searchQuery: z.string(),
@@ -134,7 +135,7 @@ export default function Payments() {
     return (<div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Record Payment</h1>
-        <p className="text-sm text-muted-foreground mt-1">Process membership fee payments</p>
+        <p className="text-sm text-muted-foreground mt-1">Process membership fee payments{selectedStudent ? ` — ${normalizeBatch(selectedStudent.batch) === "morning" ? "Morning Batch" : "Evening Batch"}` : ""}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -155,7 +156,7 @@ export default function Payments() {
                   {searchQuery && filteredStudents && filteredStudents.length > 0 && (<div className="mt-2 border rounded-md max-h-40 overflow-auto">
                       {filteredStudents.slice(0, 5).map((student) => (<button key={student.id} type="button" className="w-full text-left px-3 py-2 hover-elevate active-elevate-2 text-sm" onClick={() => handleSelectStudent(student)} data-testid={`option-student-${student.id}`}>
                           <div className="font-medium">{student.name}</div>
-                          <div className="text-xs text-muted-foreground">{student.registerNo}</div>
+                          <div className="text-xs text-muted-foreground">{student.registerNo} &middot; {normalizeBatch(student.batch) === "morning" ? "Morning" : "Evening"} Batch</div>
                         </button>))}
                     </div>)}
                   {searchQuery.trim() && filteredStudents && filteredStudents.length === 0 && (<p className="mt-2 text-sm text-muted-foreground" data-testid="search-no-results">
@@ -258,6 +259,11 @@ export default function Payments() {
                 <div className="p-3 bg-muted rounded-md">
                   <p className="text-xs text-muted-foreground">Register Number</p>
                   <p className="font-bold text-lg">{selectedStudent.registerNo}</p>
+                </div>
+
+                <div className="p-3 bg-muted rounded-md">
+                  <p className="text-xs text-muted-foreground">Batch</p>
+                  <p className="font-bold text-lg">{normalizeBatch(selectedStudent.batch) === "morning" ? "Morning Batch" : "Evening Batch"}</p>
                 </div>
 
                 <div className="p-3 bg-muted rounded-md">
