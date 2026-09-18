@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { TrendingUp, Search, History, Banknote, CreditCard } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
+import { formatDate } from "@shared/dates";
 export default function PaymentHistory() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -104,7 +105,7 @@ export default function PaymentHistory() {
                 <TableBody>
                   {filteredPayments.map((payment, index) => (<motion.tr key={payment.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index * 0.04, 0.24) }} data-testid={`row-payment-${payment.id}`}>
                       <TableCell className="font-medium">{payment.tokenNumber}</TableCell>
-                      <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDate(payment.date)}</TableCell>
                       <TableCell>{payment.registerNo}</TableCell>
                       <TableCell>{payment.studentName}</TableCell>
                       <TableCell>{payment.duration} month{payment.duration > 1 ? "s" : ""}</TableCell>

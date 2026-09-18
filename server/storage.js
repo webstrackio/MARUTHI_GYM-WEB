@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 const { Pool } = pg;
 import { eq, sql } from "drizzle-orm";
-import { students, payments, attendance, normalizeBatch } from "../shared/schema.js";
+import { students, payments, attendance, normalizeBatch, normalizePhone } from "../shared/schema.js";
 import { addCalendarMonths, toDateInputValue } from "../shared/dates.js";
 const normalizeStudent = (row) => row ? { ...row, batch: normalizeBatch(row.batch) } : row;
 const pool = new Pool({
@@ -24,6 +24,10 @@ export class DrizzleStorage {
         const result = await db.select().from(students).where(eq(students.registerNo, registerNo));
         return normalizeStudent(result[0]);
     }
+    async getStudentByPhone(phone) {
+        const result = await db.select().from(students).where(eq(students.phone, phone));
+        return normalizeStudent(result[0]);
+    }
     async getNextRegisterNo() {
         const allStudents = await db.select().from(students);
         const maxRegisterNo = allStudents.reduce((max, s) => {
@@ -33,11 +37,12 @@ export class DrizzleStorage {
         return String(maxRegisterNo + 1);
     }
     async createStudent(student) {
-        const result = await db.insert(students).values(student).returning();
+        const result = await db.insert(students).values({ ...student, phone: normalizePhone(student.phone) }).returning();
         return normalizeStudent(result[0]);
     }
     async updateStudent(id, student) {
-        const result = await db.update(students).set(student).where(eq(students.id, id)).returning();
+        const patch = student.phone !== undefined ? { ...student, phone: normalizePhone(student.phone) } : student;
+        const result = await db.update(students).set(patch).where(eq(students.id, id)).returning();
         return normalizeStudent(result[0]);
     }
     async deleteStudent(id) {

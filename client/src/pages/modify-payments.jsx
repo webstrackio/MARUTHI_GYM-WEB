@@ -16,6 +16,7 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
+import { formatDate } from "@shared/dates";
 const editPaymentSchema = z.object({
     date: z.string().min(1, "Date is required"),
     durationMonths: z.number().min(1, "Duration is required"),
@@ -114,7 +115,7 @@ export default function ModifyPayments() {
                 <TableBody>
                   {payments.map((payment, index) => (<motion.tr key={payment.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index * 0.04, 0.24) }} data-testid={`row-payment-${payment.id}`}>
                       <TableCell className="font-medium">{payment.tokenNumber}</TableCell>
-                      <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDate(payment.date)}</TableCell>
                       <TableCell>{payment.studentName}</TableCell>
                       <TableCell>{payment.registerNo}</TableCell>
                       <TableCell>{payment.duration} month{payment.duration > 1 ? "s" : ""}</TableCell>

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Delete, Check, AlertTriangle, CheckCircle } from "lucide-react";
+import { formatDate } from "@shared/dates";
 export default function AttendancePad() {
     const [registerNumber, setRegisterNumber] = useState("");
     const [previewData, setPreviewData] = useState(null);
@@ -149,7 +150,7 @@ export default function AttendancePad() {
               <div>
                 <p className="text-muted-foreground text-sm mb-2">Date</p>
                 <p className={`font-bold text-xl ${previewStyle.textColor}`}>
-                  {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "2-digit" })}
+                  {formatDate(new Date())}
                 </p>
               </div>
 

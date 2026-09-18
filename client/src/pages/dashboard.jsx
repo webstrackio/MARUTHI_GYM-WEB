@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Users, UserCheck, UserX, CalendarCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGymSettings } from "@/hooks/use-gym-settings";
-import { daysUntil, parseDateString } from "@shared/dates";
+import { daysUntil, formatDate, parseDateString } from "@shared/dates";
 import { useToday } from "@/hooks/use-today";
 export default function Dashboard() {
     const { settings } = useGymSettings();
@@ -120,7 +120,7 @@ export default function Dashboard() {
                     <div>
                       <p className="font-semibold text-foreground">{member.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Reg: {member.registerNo} · Expired: {member.expiryDate ?? "Never paid"}
+                        Reg: {member.registerNo} · Expired: {member.expiryDate ? formatDate(member.expiryDate) : "Never paid"}
                       </p>
                     </div>
                     <div className="text-right">

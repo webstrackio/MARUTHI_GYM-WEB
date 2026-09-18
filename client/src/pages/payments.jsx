@@ -15,7 +15,7 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { normalizeBatch } from "@shared/schema";
-import { addCalendarMonths, toDateInputValue } from "@shared/dates";
+import { addCalendarMonths, formatDate, toDateInputValue } from "@shared/dates";
 const formSchema = z.object({
     searchQuery: z.string(),
     studentId: z.number(),
@@ -269,18 +269,14 @@ export default function Payments() {
                 <div className="p-3 bg-muted rounded-md">
                   <p className="text-xs text-muted-foreground">Current Expiry Date</p>
                   <p className="font-bold text-lg">
-                    {new Date(selectedStudent.expiryDate).toLocaleDateString() === new Date("1970-01-01").toLocaleDateString() ? "Not Set" : new Date(selectedStudent.expiryDate).toLocaleDateString()}
+                    {selectedStudent.expiryDate ? formatDate(selectedStudent.expiryDate) : "Not Set"}
                   </p>
                 </div>
 
                 {form.watch("durationMonths") > 0 && form.watch("date") && (<div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
                     <p className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">New Expiry Date</p>
                     <p className="font-bold text-lg text-green-900 dark:text-green-300">
-                      {getNewExpiryDate(form.watch("date"), form.watch("durationMonths"), selectedStudent.expiryDate).toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric"
-                }).replace(/ /g, "-")}
+                      {formatDate(getNewExpiryDate(form.watch("date"), form.watch("durationMonths"), selectedStudent.expiryDate))}
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-400 mt-1">
                       {form.watch("durationMonths")} month{form.watch("durationMonths") > 1 ? "s" : ""}{" "}

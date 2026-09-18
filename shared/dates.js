@@ -15,6 +15,29 @@ export function toDateInputValue(date) {
     return date.toISOString().split("T")[0];
 }
 
+// Formats a date as DD/MM/YYYY with day and month zero-padded to 2 digits.
+// Accepts Date objects, "YYYY-MM-DD" strings, ISO date-time strings, or any
+// value liked by `new Date()`. Never changes the underlying stored value.
+// Example: "2026-08-25" displays as "25/08/2026", never "08/25/2026".
+export function formatDate(date) {
+    if (date === null || date === undefined || date === "") {
+        return "";
+    }
+    if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}/.test(date)) {
+        const [y, m, d] = date.slice(0, 10).split("-").map(Number);
+        if (Number.isInteger(y) && Number.isInteger(m) && Number.isInteger(d)) {
+            return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+        }
+    }
+    const dt = new Date(date);
+    if (isNaN(dt.getTime())) {
+        return String(date);
+    }
+    const day = String(dt.getDate()).padStart(2, "0");
+    const month = String(dt.getMonth() + 1).padStart(2, "0");
+    return `${day}/${month}/${dt.getFullYear()}`;
+}
+
 // Parses a "YYYY-MM-DD" date string as a *local* midnight date so calendar-day
 // arithmetic stays stable regardless of the current time of day.
 export function parseDateString(dateStr) {

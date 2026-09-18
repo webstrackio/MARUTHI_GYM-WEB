@@ -1,6 +1,6 @@
 import { createServer } from "http";
 import { storage } from "./storage.js";
-import { insertStudentSchema, insertPaymentSchema, normalizeBatch } from "../shared/schema.js";
+import { insertStudentSchema, insertPaymentSchema, normalizeBatch, normalizePhone } from "../shared/schema.js";
 import { addCalendarMonths, toDateInputValue, daysUntil } from "../shared/dates.js";
 export async function registerRoutes(app) {
     // Dashboard stats
@@ -51,6 +51,20 @@ export async function registerRoutes(app) {
     });
     app.post("/api/students", async (req, res) => {
         try {
+            const normalizedPhone = normalizePhone(req.body.phone);
+            if (!/^[0-9]{10}$/.test(normalizedPhone)) {
+                return res.status(400).json({ error: "Phone number must be exactly 10 digits" });
+            }
+            // A phone number must be unique across the whole database, regardless
+            // of batch or membership status.
+            const existingPhone = await storage.getStudentByPhone(normalizedPhone);
+            if (existingPhone) {
+                return res.status(409).json({
+                    error: "This phone number is already registered",
+                    conflict: true,
+                    student: existingPhone,
+                });
+            }
             // Register number is generated automatically from the backend to
             // guarantee it is numeric, sequential and unique.
             let registerNo = await storage.getNextRegisterNo();
@@ -64,10 +78,27 @@ export async function registerRoutes(app) {
             }
             const validatedData = insertStudentSchema.parse({
                 ...req.body,
+                phone: normalizedPhone,
                 registerNo,
                 batch: normalizeBatch(req.body.batch),
             });
-            const student = await storage.createStudent(validatedData);
+            let student;
+            try {
+                student = await storage.createStudent(validatedData);
+            }
+            catch (error) {
+                // Database unique constraint is the final protection against
+                // race conditions where two requests insert the same phone at once.
+                if (error && (error.code === "23505" || /unique/i.test(`${error.detail || ""}${error.message || ""}`))) {
+                    const duplicate = await storage.getStudentByPhone(normalizedPhone);
+                    return res.status(409).json({
+                        error: "This phone number is already registered",
+                        conflict: true,
+                        student: duplicate,
+                    });
+                }
+                throw error;
+            }
             res.status(201).json(student);
         }
         catch (error) {
@@ -88,7 +119,21 @@ export async function registerRoutes(app) {
             }
             const allowedFields = {};
             if (req.body.name !== undefined) allowedFields.name = req.body.name;
-            if (req.body.phone !== undefined) allowedFields.phone = req.body.phone;
+            if (req.body.phone !== undefined) {
+                const normalizedPhone = normalizePhone(req.body.phone);
+                if (!/^[0-9]{10}$/.test(normalizedPhone)) {
+                    return res.status(400).json({ error: "Phone number must be exactly 10 digits" });
+                }
+                const duplicate = await storage.getStudentByPhone(normalizedPhone);
+                if (duplicate && duplicate.id !== id) {
+                    return res.status(409).json({
+                        error: "This phone number is already registered",
+                        conflict: true,
+                        student: duplicate,
+                    });
+                }
+                allowedFields.phone = normalizedPhone;
+            }
             if (req.body.address !== undefined) allowedFields.address = req.body.address;
             if (req.body.joinDate !== undefined) allowedFields.joinDate = req.body.joinDate;
             if (req.body.expiryDate !== undefined) allowedFields.expiryDate = req.body.expiryDate;

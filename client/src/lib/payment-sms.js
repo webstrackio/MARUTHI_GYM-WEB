@@ -1,11 +1,6 @@
+import { formatDate } from "@shared/dates";
 export function formatSmsDate(date) {
-    return new Date(date)
-        .toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-    })
-        .replace(/ /g, "-");
+    return formatDate(date);
 }
 export function formatPlanLabel(duration) {
     if (duration % 12 === 0 && duration / 12 > 0) {

@@ -10,12 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Users, LogIn, AlertCircle, CheckCircle, Search, Sun, Moon } from "lucide-react";
+import { Plus, Pencil, Users, LogIn, AlertCircle, AlertTriangle, CheckCircle, Search, Sun, Moon, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertStudentSchema, normalizeBatch } from "@shared/schema";
-import { daysUntil, parseDateString } from "@shared/dates";
+import { insertStudentSchema, normalizeBatch, normalizePhone } from "@shared/schema";
+import { daysUntil, formatDate, parseDateString } from "@shared/dates";
 import { useToday } from "@/hooks/use-today";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -40,10 +40,10 @@ function MemberCard({ title, description, students, columns, getStatus, getDaysL
             case "Address":
                 return <TableCell>{student.address}</TableCell>;
             case "Join Date":
-                return <TableCell>{new Date(student.joinDate).toLocaleDateString()}</TableCell>;
+                return <TableCell>{formatDate(student.joinDate)}</TableCell>;
             case "Expiry Date":
                 return (<TableCell>
-            {student.expiryDate ? new Date(student.expiryDate).toLocaleDateString() : "-"}
+            {student.expiryDate ? formatDate(student.expiryDate) : "-"}
           </TableCell>);
             case "Batch":
                 return (<TableCell>
@@ -122,6 +122,16 @@ export default function Students() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState(null);
     const [attendanceFeedback, setAttendanceFeedback] = useState(null);
+    const [duplicateStudent, setDuplicateStudent] = useState(null);
+    const parseApiError = (error) => {
+        try {
+            const text = error.message?.slice(error.message.indexOf(": ") + 2);
+            return text ? JSON.parse(text) : null;
+        }
+        catch {
+            return null;
+        }
+    };
     const { toast } = useToast();
     const { data: studentsData, isLoading } = useQuery({
         queryKey: ["/api/students"],
@@ -161,8 +171,13 @@ export default function Students() {
             form.reset();
             navigate(`/payments?studentId=${createdStudent.id}`);
         },
-        onError: () => {
-            toast({ title: "Failed to add student", variant: "destructive" });
+        onError: (error) => {
+            const body = parseApiError(error);
+            if (body?.conflict && body.student) {
+                setDuplicateStudent(body.student);
+                return;
+            }
+            toast({ title: body?.error || "Failed to add student", variant: "destructive" });
         },
     });
     const updateMutation = useMutation({
@@ -176,8 +191,14 @@ export default function Students() {
             setEditingStudent(null);
             form.reset();
         },
-        onError: () => {
-            toast({ title: "Failed to update student", variant: "destructive" });
+        onError: (error) => {
+            const body = parseApiError(error);
+            if (body?.conflict && body.student) {
+                setDuplicateStudent(body.student);
+            }
+            else {
+                toast({ title: body?.error || "Failed to update student", variant: "destructive" });
+            }
         },
     });
     const attendanceMutation = useMutation({
@@ -265,12 +286,24 @@ export default function Students() {
         setIsDialogOpen(true);
     };
     const onSubmit = (data) => {
+        if (createMutation.isPending || updateMutation.isPending)
+            return;
+        const payload = { ...data, phone: normalizePhone(data.phone) };
         if (editingStudent) {
-            updateMutation.mutate({ ...data, id: editingStudent.id });
+            updateMutation.mutate({ ...payload, id: editingStudent.id });
         }
         else {
-            createMutation.mutate(data);
+            createMutation.mutate(payload);
         }
+    };
+    const handleViewDuplicateStudent = () => {
+        const id = duplicateStudent?.id;
+        setDuplicateStudent(null);
+        if (!id)
+            return;
+        setIsDialogOpen(false);
+        form.reset();
+        navigate(`/payments?studentId=${id}`);
     };
     const getStatus = (expiryDate) => {
         if (!expiryDate)
@@ -482,6 +515,63 @@ export default function Students() {
         </DialogContent>
       </Dialog>
 
+      {/* Duplicate Phone Number Dialog */}
+      <Dialog open={duplicateStudent !== null} onOpenChange={(open) => !open && setDuplicateStudent(null)}>
+        <DialogContent className="max-w-md w-[calc(100%-2rem)] sm:w-full" data-testid="dialog-duplicate-student">
+          {duplicateStudent && (<div className="space-y-6">
+              <div className="text-center">
+                <AlertTriangle className="h-16 w-16 text-amber-500 mx-auto"/>
+                <h2 className="text-2xl font-bold text-amber-600 dark:text-amber-400">Student Already Exists</h2>
+                <p className="text-sm text-muted-foreground mt-1">This phone number is already registered.</p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-gray-100 dark:bg-gray-900/30 space-y-3">
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Name:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100 text-right">{duplicateStudent.name}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Register No.:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{duplicateStudent.registerNo}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400"><Phone className="h-3.5 w-3.5 inline mr-1"/></span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{duplicateStudent.phone}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Batch:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{normalizeBatch(duplicateStudent.batch) === "morning" ? "Morning" : "Evening"}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Address:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100 text-right">{duplicateStudent.address}</span>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                  <Badge variant={getStatus(duplicateStudent.expiryDate) === "Active" ? "default" : "destructive"} className={getStatus(duplicateStudent.expiryDate) === "Active"
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                        : getStatus(duplicateStudent.expiryDate) === "Expiring Today"
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                            : getStatus(duplicateStudent.expiryDate) === "Pay Required"
+                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                                : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"} data-testid="badge-duplicate-status">
+                    {getStatus(duplicateStudent.expiryDate)}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button onClick={handleViewDuplicateStudent} className="flex-1" data-testid="button-view-student">
+                  View Student
+                </Button>
+                <Button variant="outline" onClick={() => setDuplicateStudent(null)} className="flex-1" data-testid="button-cancel-duplicate">
+                  Cancel
+                </Button>
+              </div>
+            </div>)}
+        </DialogContent>
+      </Dialog>
+
       {/* Attendance Feedback Dialog */}
       <Dialog open={attendanceFeedback !== null} onOpenChange={(open) => !open && setAttendanceFeedback(null)}>
         <DialogContent className="max-w-md w-[calc(100%-2rem)] sm:w-full" data-testid={`feedback-${attendanceFeedback?.type}`}>
@@ -507,7 +597,7 @@ export default function Students() {
                   </div>
                   {attendanceFeedback.data.date && (<div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Date:</span>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{attendanceFeedback.data.date}</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(attendanceFeedback.data.date)}</span>
                     </div>)}
                   {attendanceFeedback.data.timeIn && (<div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Time In:</span>
