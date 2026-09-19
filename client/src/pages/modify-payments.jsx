@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
-import { formatDate } from "@shared/dates";
+import { formatDate, todayString } from "@shared/dates";
 const editPaymentSchema = z.object({
     date: z.string().min(1, "Date is required"),
     durationMonths: z.number().min(1, "Duration is required"),
@@ -34,7 +33,7 @@ export default function ModifyPayments() {
     const form = useForm({
         resolver: zodResolver(editPaymentSchema),
         defaultValues: {
-            date: new Date().toISOString().split("T")[0],
+            date: todayString(),
             durationMonths: 0,
             amount: 0,
             paymentMethod: "cash",
@@ -45,6 +44,7 @@ export default function ModifyPayments() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
+            queryClient.invalidateQueries({ predicate: (query) => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/income/daily") });
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             toast({ title: "Payment updated successfully" });
@@ -61,6 +61,7 @@ export default function ModifyPayments() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
+            queryClient.invalidateQueries({ predicate: (query) => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/income/daily") });
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             toast({ title: "Payment deleted successfully" });
@@ -113,7 +114,7 @@ export default function ModifyPayments() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payments.map((payment, index) => (<motion.tr key={payment.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index * 0.04, 0.24) }} data-testid={`row-payment-${payment.id}`}>
+                  {payments.map((payment) => (<tr key={payment.id} data-testid={`row-payment-${payment.id}`}>
                       <TableCell className="font-medium">{payment.tokenNumber}</TableCell>
                       <TableCell>{formatDate(payment.date)}</TableCell>
                       <TableCell>{payment.studentName}</TableCell>
@@ -142,7 +143,7 @@ export default function ModifyPayments() {
                           </Button>
                         </div>
                       </TableCell>
-                    </motion.tr>))}
+                    </tr>))}
                 </TableBody>
               </Table>
             </div>) : (<div className="text-center py-12 text-muted-foreground">
@@ -202,7 +203,7 @@ export default function ModifyPayments() {
 
               <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem>
                     <FormLabel>Payment Method *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-payment-method">
                           <SelectValue placeholder="Select payment method"/>

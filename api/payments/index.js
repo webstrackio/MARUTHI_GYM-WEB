@@ -1,6 +1,6 @@
 import { storage } from "../../server/lib/storage.js";
 import { insertPaymentSchema } from "../../shared/schema.js";
-import { addCalendarMonths, toDateInputValue } from "../../shared/dates.js";
+import { calcExpiryDate, isDateString } from "../../shared/dates.js";
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
@@ -26,7 +26,8 @@ export default async function handler(req, res) {
         student.expiryDate && new Date(student.expiryDate) > new Date(req.body.date)
           ? new Date(student.expiryDate)
           : new Date(req.body.date);
-      const expiryDate = toDateInputValue(addCalendarMonths(baseDate, durationMonths));
+      const manualExpiryDate = isDateString(req.body.expiryDate) ? req.body.expiryDate : null;
+      const expiryDate = manualExpiryDate ?? calcExpiryDate(baseDate, durationMonths);
       const validatedData = insertPaymentSchema.parse({
         ...req.body,
         duration: durationMonths,

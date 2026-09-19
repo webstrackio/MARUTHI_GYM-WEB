@@ -8,14 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Receipt } from "lucide-react";
+import { Calendar, CreditCard, Pencil, Receipt } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { normalizeBatch } from "@shared/schema";
-import { addCalendarMonths, formatDate, toDateInputValue } from "@shared/dates";
+import { cn } from "@/lib/utils";
+import { calcExpiryDate, formatDate, todayString } from "@shared/dates";
 const formSchema = z.object({
     searchQuery: z.string(),
     studentId: z.number(),
@@ -24,11 +25,87 @@ const formSchema = z.object({
     amount: z.number().min(1, "Amount must be greater than 0"),
     paymentMethod: z.enum(["cash", "online"]),
 });
+// Parses a "DD/MM/YYYY" display string into a "YYYY-MM-DD" storage string.
+// Returns "" for anything that is not a real calendar date.
+function parseDdmmyyyy(text) {
+    const match = (text || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match)
+        return "";
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31)
+        return "";
+    const dt = new Date(year, month - 1, day);
+    if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day)
+        return "";
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+// A dual-mode date field. It shows a plain editable text input that formats
+// keystrokes as DD/MM/YYYY, backed by a native date picker that opens when the
+// calendar icon is clicked. `value` is always "YYYY-MM-DD"; `onChange` fires
+// with the parsed value once a complete valid date is entered or picked.
+// `onTextChange` fires with the raw DD/MM/YYYY text on every keystroke so the
+// parent can validate what the user actually typed.
+function DateInput({ value, onChange, onTextChange, disabled = false, readOnly = false, className, placeholder = "DD/MM/YYYY", label, "data-testid": dataTestId, "data-testid-calendar": dataTestIdCalendar }) {
+    const [text, setText] = useState(() => formatDate(value));
+    const lastValue = useRef(value);
+    useEffect(() => {
+        if (value !== lastValue.current) {
+            lastValue.current = value;
+            setText(formatDate(value));
+        }
+    }, [value]);
+    const toDigits = (raw) => raw.replace(/\D/g, "").slice(0, 8);
+    const mask = (digits) => {
+        if (digits.length > 4)
+            return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+        if (digits.length > 2)
+            return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+        return digits;
+    };
+    const handleTextChange = (e) => {
+        if (readOnly || disabled)
+            return;
+        const digits = toDigits(e.target.value);
+        const formatted = mask(digits);
+        setText(formatted);
+        const parsed = digits.length === 8 ? parseDdmmyyyy(formatted) : "";
+        if (parsed) {
+            lastValue.current = parsed;
+            onChange(parsed);
+        }
+        else if (digits.length === 0) {
+            onChange("");
+        }
+        onTextChange?.(formatted);
+    };
+    const handlePickerChange = (e) => {
+        const picked = e.target.value;
+        e.target.value = "";
+        if (!picked)
+            return;
+        lastValue.current = picked;
+        setText(formatDate(picked));
+        onChange(picked);
+        onTextChange?.(formatDate(picked));
+    };
+    return (<div className="relative">
+      <Input value={text} onChange={handleTextChange} placeholder={placeholder} disabled={disabled} readOnly={readOnly} aria-label={label} className={cn("pr-9", className)} data-testid={dataTestId}/>
+      <Calendar className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none"/>
+      <input type="date" value={value || ""} onChange={handlePickerChange} aria-label={`${label} calendar`} data-testid={dataTestIdCalendar} disabled={disabled || readOnly} style={{ colorScheme: "light dark" }} className="absolute right-0 top-1/2 h-8 w-8 -translate-y-1/2 cursor-pointer opacity-0"/>
+    </div>);
+}
 export default function Payments() {
     const search = useSearch();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedStudent, setSelectedStudent] = useState(null);
     const autoSelectedRef = useRef(false);
+    const [isEditingExpiry, setIsEditingExpiry] = useState(false);
+    const [pendingExpiry, setPendingExpiry] = useState(null);
+    const [pendingExpiryText, setPendingExpiryText] = useState("");
+    const [pendingExpiryError, setPendingExpiryError] = useState(null);
+    const [editedExpiry, setEditedExpiry] = useState(null);
     const { toast } = useToast();
     const { settings } = useGymSettings();
     const { data: students } = useQuery({
@@ -42,7 +119,7 @@ export default function Payments() {
         defaultValues: {
             searchQuery: "",
             studentId: 0,
-            date: new Date().toISOString().split("T")[0],
+            date: todayString(),
             durationMonths: 0,
             amount: 0,
             paymentMethod: "cash",
@@ -84,13 +161,19 @@ export default function Payments() {
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
+            queryClient.invalidateQueries({ predicate: (query) => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/income/daily") });
             toast({ title: "Payment recorded successfully" });
             setSelectedStudent(null);
             setSearchQuery("");
+            setEditedExpiry(null);
+            setIsEditingExpiry(false);
+            setPendingExpiry(null);
+            setPendingExpiryText("");
+            setPendingExpiryError(null);
             form.reset({
                 searchQuery: "",
                 studentId: 0,
-                date: new Date().toISOString().split("T")[0],
+                date: todayString(),
                 durationMonths: 0,
                 amount: 0,
                 paymentMethod: "cash",
@@ -114,7 +197,44 @@ export default function Payments() {
         : undefined;
     const getNewExpiryDate = (paymentDate, durationMonths, currentExpiry) => {
         const baseDate = new Date(currentExpiry) > new Date(paymentDate) ? new Date(currentExpiry) : new Date(paymentDate);
-        return addCalendarMonths(baseDate, durationMonths);
+        return calcExpiryDate(baseDate, durationMonths);
+    };
+    const watchedDate = form.watch("date");
+    const watchedDuration = form.watch("durationMonths");
+    const showExpiryPreview = watchedDuration > 0 && watchedDate;
+    const autoExpiryDate = showExpiryPreview ? getNewExpiryDate(watchedDate, watchedDuration, selectedStudent?.expiryDate ?? "") : null;
+    const autoExpiryInput = autoExpiryDate || "";
+    const expiryInputValue = editedExpiry ?? autoExpiryInput;
+    useEffect(() => {
+        setEditedExpiry(null);
+        setPendingExpiry(null);
+        setPendingExpiryText("");
+        setPendingExpiryError(null);
+        setIsEditingExpiry(false);
+    }, [watchedDate, watchedDuration, selectedStudent?.id]);
+    const handleStartEditExpiry = () => {
+        setPendingExpiry(expiryInputValue);
+        setPendingExpiryText(expiryInputValue ? formatDate(expiryInputValue) : "");
+        setPendingExpiryError(null);
+        setIsEditingExpiry(true);
+    };
+    const handleSaveExpiry = () => {
+        const parsed = parseDdmmyyyy(pendingExpiryText);
+        if (!parsed) {
+            setPendingExpiryError("Enter a valid date in DD/MM/YYYY format");
+            return;
+        }
+        setEditedExpiry(parsed);
+        setPendingExpiry(parsed);
+        setPendingExpiryError(null);
+        setIsEditingExpiry(false);
+        setPendingExpiryText("");
+    };
+    const handleCancelExpiry = () => {
+        setIsEditingExpiry(false);
+        setPendingExpiry(null);
+        setPendingExpiryText("");
+        setPendingExpiryError(null);
     };
     const onSubmit = (data) => {
         if (!selectedStudent) {
@@ -130,6 +250,7 @@ export default function Payments() {
             duration: data.durationMonths,
             amount: data.amount,
             paymentMethod: data.paymentMethod,
+            expiryDate: editedExpiry ?? undefined,
         });
     };
     return (<div className="space-y-6">
@@ -167,7 +288,7 @@ export default function Payments() {
                 <FormField control={form.control} name="date" render={({ field }) => (<FormItem>
                       <FormLabel>Payment Date *</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} data-testid="input-payment-date"/>
+                        <DateInput value={field.value} onChange={(v) => field.onChange(v)} label="Payment Date" data-testid="input-payment-date" data-testid-calendar="calendar-payment-date"/>
                       </FormControl>
                       <FormMessage />
                     </FormItem>)}/>
@@ -192,11 +313,33 @@ export default function Payments() {
                     </FormItem>)}/>
 
                 {form.watch("date") && form.watch("durationMonths") > 0 && (<FormItem>
-                      <FormLabel>Expiry Date</FormLabel>
+                      <div className="flex items-center justify-between gap-2">
+                        <FormLabel>Expiry Date</FormLabel>
+                        {!isEditingExpiry && (<Button variant="ghost" size="sm" className="h-7 px-2 text-xs" type="button" onClick={handleStartEditExpiry} data-testid="button-edit-expiry">
+                            <Pencil className="h-3.5 w-3.5 mr-1"/>
+                            Edit
+                          </Button>)}
+                      </div>
                       <FormControl>
-                        <Input type="date" value={toDateInputValue(getNewExpiryDate(form.watch("date"), form.watch("durationMonths"), selectedStudent?.expiryDate ?? ""))} readOnly data-testid="input-expiry-date"/>
+                        {isEditingExpiry ? (<div className="space-y-2">
+                            <DateInput value={pendingExpiry || expiryInputValue} onChange={setPendingExpiry} onTextChange={(t) => {
+                                setPendingExpiryText(t);
+                                setPendingExpiryError(null);
+                            }} label="Expiry Date" data-testid="input-edit-expiry" data-testid-calendar="calendar-edit-expiry"/>
+                            {pendingExpiryError && (<p className="text-sm font-medium text-destructive" data-testid="expiry-validation-error">
+                                {pendingExpiryError}
+                              </p>)}
+                            <div className="flex gap-2">
+                              <Button size="sm" type="button" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={handleSaveExpiry} data-testid="button-save-expiry">
+                                Save
+                              </Button>
+                              <Button size="sm" type="button" variant="outline" className="flex-1" onClick={handleCancelExpiry} data-testid="button-cancel-expiry">
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>) : (<DateInput value={expiryInputValue} readOnly label="Expiry Date" data-testid="input-expiry-date" data-testid-calendar="calendar-expiry-date"/>)}
                       </FormControl>
-                      <p className="text-xs text-muted-foreground">Calculated automatically from the payment date and duration.</p>
+                      <p className="text-xs text-muted-foreground">{editedExpiry ? "Manually edited expiry date (overrides automatic calculation)" : "Calculated automatically from the payment date and duration."}</p>
                     </FormItem>)}
 
                 <FormField control={form.control} name="amount" render={({ field }) => (<FormItem>
@@ -212,7 +355,7 @@ export default function Payments() {
 
                 <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem>
                       <FormLabel>Payment Method *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-payment-method">
                             <SelectValue placeholder="Select payment method"/>
@@ -273,15 +416,12 @@ export default function Payments() {
                   </p>
                 </div>
 
-                {form.watch("durationMonths") > 0 && form.watch("date") && (<div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
+                {showExpiryPreview && (<div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
                     <p className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">New Expiry Date</p>
-                    <p className="font-bold text-lg text-green-900 dark:text-green-300">
-                      {formatDate(getNewExpiryDate(form.watch("date"), form.watch("durationMonths"), selectedStudent.expiryDate))}
-                    </p>
-                    <p className="text-xs text-green-700 dark:text-green-400 mt-1">
-                      {form.watch("durationMonths")} month{form.watch("durationMonths") > 1 ? "s" : ""}{" "}
-                      from membership start date
-                    </p>
+                    <p className="font-bold text-lg text-green-900 dark:text-green-300 tabular-nums" data-testid="text-new-expiry-date">{formatDate(expiryInputValue)}</p>
+                    {editedExpiry ? (<p className="text-xs text-green-700 dark:text-green-400 mt-1">Manually set expiry date (overrides automatic calculation)</p>) : (<p className="text-xs text-green-700 dark:text-green-400 mt-1">
+                        {watchedDuration} month{watchedDuration > 1 ? "s" : ""} from membership start date
+                      </p>)}
                   </div>)}
               </div>) : (<div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                 <Receipt className="h-16 w-16 mb-4 opacity-20"/>

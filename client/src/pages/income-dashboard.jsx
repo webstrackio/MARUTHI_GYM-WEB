@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Wallet, CreditCard, TrendingUp, Calendar, DollarSign } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatIndianNumber } from "@/lib/utils";
+import DailyIncome from "@/components/daily-income";
 export default function IncomeDashboard() {
     const { data: stats, isLoading } = useQuery({
         queryKey: ["/api/income/stats"],
@@ -18,11 +18,7 @@ export default function IncomeDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <motion.div whileHover={{
-            scale: [1, 1.06, 1],
-            y: [0, -6, 0],
-            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
-        }}>
+        <div>
           <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <div>
@@ -39,13 +35,9 @@ export default function IncomeDashboard() {
                 </p>)}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div whileHover={{
-            scale: [1, 1.06, 1],
-            y: [0, -6, 0],
-            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
-        }}>
+        <div>
           <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <div>
@@ -62,15 +54,11 @@ export default function IncomeDashboard() {
                 </p>)}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <motion.div whileHover={{
-            scale: [1, 1.06, 1],
-            y: [0, -6, 0],
-            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
-        }}>
+        <div>
           <Card className="bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <div>
@@ -87,13 +75,9 @@ export default function IncomeDashboard() {
                 </p>)}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div whileHover={{
-            scale: [1, 1.06, 1],
-            y: [0, -6, 0],
-            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
-        }}>
+        <div>
           <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <div>
@@ -110,13 +94,9 @@ export default function IncomeDashboard() {
                 </p>)}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div whileHover={{
-            scale: [1, 1.06, 1],
-            y: [0, -6, 0],
-            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
-        }}>
+        <div>
           <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <div>
@@ -133,8 +113,10 @@ export default function IncomeDashboard() {
                 </p>)}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
+
+      <DailyIncome />
 
       <Card>
         <CardHeader>
@@ -162,11 +144,7 @@ export default function IncomeDashboard() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <motion.div whileHover={{
-            scale: [1, 1.06, 1],
-            y: [0, -6, 0],
-            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
-        }}>
+        <div>
           <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
             <CardHeader>
               <CardTitle className="text-black dark:text-white">Average Monthly Income</CardTitle>
@@ -179,13 +157,9 @@ export default function IncomeDashboard() {
                 </p>)}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div whileHover={{
-            scale: [1, 1.06, 1],
-            y: [0, -6, 0],
-            transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
-        }}>
+        <div>
           <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
             <CardHeader>
               <CardTitle className="text-black dark:text-white">Total Payments Received</CardTitle>
@@ -197,7 +171,7 @@ export default function IncomeDashboard() {
                 </p>)}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
     </div>);
 }

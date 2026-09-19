@@ -303,3 +303,14 @@
     inset: -1px;
   }
 }
+
+/* Hide the sidebar vertical scrollbar while keeping content scrollable */
+[data-sidebar="content"] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+[data-sidebar="content"]::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

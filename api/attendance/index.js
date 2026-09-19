@@ -1,10 +1,10 @@
 import { storage } from "../../server/lib/storage.js";
-import { daysUntil } from "../../shared/dates.js";
+import { daysUntil, todayString } from "../../shared/dates.js";
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
     try {
-      const date = req.query.date || new Date().toISOString().split("T")[0];
+      const date = req.query.date || todayString();
       const records = await storage.getAttendanceByDate(date);
       res.json(records);
     } catch (error) {
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
           isExpired: true,
         });
       }
-      const today = new Date().toISOString().split("T")[0];
+      const today = todayString();
       const existingRecord = await storage.getAttendanceByDate(today);
       const alreadyMarked = existingRecord.some((r) => r.registerNo === registerNoString);
       if (alreadyMarked) {

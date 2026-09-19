@@ -1,5 +1,4 @@
 import { Switch, Route, useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -47,8 +46,7 @@ function Router() {
         <Route component={NotFound}/>
       </Switch>);
     }
-    const noAnimation = ["/settings", "/income-dashboard", "/students"].includes(location);
-    const page = (<Switch>
+    return (<Switch>
       <Route path="/" component={Dashboard}/>
       <Route path="/students" component={Students}/>
       <Route path="/payments" component={Payments}/>
@@ -60,14 +58,6 @@ function Router() {
       <Route path="/settings" component={GymSettings}/>
       <Route component={NotFound}/>
     </Switch>);
-    if (noAnimation) {
-        return page;
-    }
-    return (<AnimatePresence mode="wait">
-      <motion.div key={location} initial={{ opacity: 0, scale: 0.94, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 1.04, y: -8 }} transition={{ type: "spring", stiffness: 240, damping: 24, mass: 1 }}>
-        {page}
-      </motion.div>
-    </AnimatePresence>);
 }
 function App() {
     const role = useRole();

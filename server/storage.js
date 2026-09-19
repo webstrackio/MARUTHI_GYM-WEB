@@ -3,7 +3,7 @@ import pg from "pg";
 const { Pool } = pg;
 import { eq, sql } from "drizzle-orm";
 import { students, payments, attendance, normalizeBatch, normalizePhone } from "../shared/schema.js";
-import { addCalendarMonths, toDateInputValue } from "../shared/dates.js";
+import { addDays, calcExpiryDate, todayString } from "../shared/dates.js";
 const normalizeStudent = (row) => row ? { ...row, batch: normalizeBatch(row.batch) } : row;
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -77,7 +77,7 @@ export class DrizzleStorage {
         let expiry = null;
         for (const p of studentPayments) {
             const baseDate = expiry && new Date(expiry) > new Date(p.date) ? new Date(expiry) : new Date(p.date);
-            expiry = toDateInputValue(addCalendarMonths(baseDate, p.duration));
+            expiry = calcExpiryDate(baseDate, p.duration);
             await db.update(payments).set({ startDate: p.date, expiryDate: expiry }).where(eq(payments.id, p.id));
         }
         await db.update(students).set({ expiryDate: expiry }).where(eq(students.id, studentId));
@@ -87,7 +87,7 @@ export class DrizzleStorage {
         return db.select().from(attendance).where(eq(attendance.date, date));
     }
     async getTodayAttendanceCount() {
-        const today = new Date().toISOString().split("T")[0];
+        const today = todayString();
         const result = await db.select({ count: sql `count(*)` }).from(attendance).where(eq(attendance.date, today));
         return Number(result[0]?.count ?? 0);
     }
@@ -98,7 +98,7 @@ export class DrizzleStorage {
     // Dashboard stats
     async getDashboardStats() {
         const allStudents = await db.select().from(students);
-        const today = new Date().toISOString().split("T")[0];
+        const today = todayString();
         const todayAttendanceRows = await db.select().from(attendance).where(eq(attendance.date, today));
         const now = new Date();
         const activeMemberships = allStudents.filter(s => {
@@ -161,6 +161,32 @@ export class DrizzleStorage {
             monthlyBreakdown,
             averageMonthlyIncome,
             totalPaymentsReceived: allPayments.length,
+        };
+    }
+    // Daily income stats for a single calendar day plus the trailing 7 days.
+    // Payment dates are compared as plain "YYYY-MM-DD" strings so records can
+    // never shift to another day because of timezone conversion.
+    async getDailyIncome(dateStr) {
+        const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : todayString();
+        const allPayments = await db.select().from(payments);
+        const summarize = (list, date) => {
+            const cash = list.filter(p => p.paymentMethod === "cash").reduce((sum, p) => sum + p.amount, 0);
+            const online = list.filter(p => p.paymentMethod === "online").reduce((sum, p) => sum + p.amount, 0);
+            return { date, cash, online, total: cash + online, count: list.length };
+        };
+        const dayPayments = allPayments
+            .filter(p => p.date === targetDate)
+            .sort((a, b) => b.id - a.id);
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+            const day = addDays(targetDate, -i);
+            last7Days.push(summarize(allPayments.filter(p => p.date === day), day));
+        }
+        return {
+            selectedDate: targetDate,
+            day: summarize(dayPayments, targetDate),
+            payments: dayPayments,
+            last7Days,
         };
     }
 }

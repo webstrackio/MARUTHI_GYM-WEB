@@ -1,7 +1,7 @@
 import { createServer } from "http";
 import { storage } from "./storage.js";
 import { insertStudentSchema, insertPaymentSchema, normalizeBatch, normalizePhone } from "../shared/schema.js";
-import { addCalendarMonths, toDateInputValue, daysUntil } from "../shared/dates.js";
+import { calcExpiryDate, daysUntil, isDateString, todayString } from "../shared/dates.js";
 export async function registerRoutes(app) {
     // Dashboard stats
     app.get("/api/dashboard/stats", async (_req, res) => {
@@ -189,7 +189,11 @@ export async function registerRoutes(app) {
             const baseDate = student.expiryDate && new Date(student.expiryDate) > new Date(req.body.date)
                 ? new Date(student.expiryDate)
                 : new Date(req.body.date);
-            const expiryDate = toDateInputValue(addCalendarMonths(baseDate, durationMonths));
+            // A manually chosen expiry date (sent as YYYY-MM-DD) overrides the
+            // automatic calculation when provided. Otherwise the automatic
+            // calculation below is used, keeping existing behavior unchanged.
+            const manualExpiryDate = isDateString(req.body.expiryDate) ? req.body.expiryDate : null;
+            const expiryDate = manualExpiryDate ?? calcExpiryDate(baseDate, durationMonths);
             const validatedData = insertPaymentSchema.parse({
                 ...req.body,
                 duration: durationMonths,
@@ -261,10 +265,20 @@ export async function registerRoutes(app) {
             res.status(500).json({ error: "Failed to fetch income stats" });
         }
     });
+    app.get("/api/income/daily", async (req, res) => {
+        try {
+            const stats = await storage.getDailyIncome(req.query.date);
+            res.json(stats);
+        }
+        catch (error) {
+            console.error("GET /api/income/daily failed:", error);
+            res.status(500).json({ error: "Failed to fetch daily income" });
+        }
+    });
     // Attendance endpoints
     app.get("/api/attendance", async (req, res) => {
         try {
-            const date = req.query.date || new Date().toISOString().split("T")[0];
+            const date = req.query.date || todayString();
             const records = await storage.getAttendanceByDate(date);
             res.json(records);
         }
@@ -319,7 +333,7 @@ export async function registerRoutes(app) {
                 });
             }
             // Step 4: Check if already marked today (only for active members)
-            const today = new Date().toISOString().split("T")[0];
+            const today = todayString();
             const existingRecord = await storage.getAttendanceByDate(today);
             const alreadyMarked = existingRecord.some((r) => r.registerNo === registerNoString);
             if (alreadyMarked) {

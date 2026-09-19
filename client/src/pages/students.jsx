@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertStudentSchema, normalizeBatch, normalizePhone } from "@shared/schema";
-import { daysUntil, formatDate, parseDateString } from "@shared/dates";
+import { daysUntil, formatDate, parseDateString, todayString } from "@shared/dates";
 import { useToday } from "@/hooks/use-today";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -156,7 +156,7 @@ export default function Students() {
             name: "",
             phone: "",
             address: "",
-            joinDate: new Date().toISOString().split("T")[0],
+            joinDate: todayString(),
             batch: "morning",
         },
     });
@@ -182,7 +182,7 @@ export default function Students() {
     });
     const updateMutation = useMutation({
         mutationFn: ({ id, ...data }) => apiRequest("PATCH", `/api/students/${id}`, data),
-        onSuccess: async () => {
+        onSuccess: async (_response, variables) => {
             await queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             await queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             await queryClient.refetchQueries({ queryKey: ["/api/students"] });
@@ -190,6 +190,7 @@ export default function Students() {
             setIsDialogOpen(false);
             setEditingStudent(null);
             form.reset();
+            navigate(`/payments?studentId=${variables.id}`);
         },
         onError: (error) => {
             const body = parseApiError(error);
@@ -214,7 +215,7 @@ export default function Students() {
                 message: data.message,
                 data: {
                     name: data.student?.name ?? null,
-                    date: new Date().toISOString().split("T")[0],
+                    date: todayString(),
                     timeIn: data.timeIn ?? null,
                     daysLeft: typeof data.daysLeft === "number" ? data.daysLeft : null,
                     status: typeof data.isExpired === "boolean" ? (data.isExpired ? "EXPIRED" : "ACTIVE") : null,
@@ -271,7 +272,7 @@ export default function Students() {
                 name: "",
                 phone: "",
                 address: "",
-                joinDate: new Date().toISOString().split("T")[0],
+                joinDate: todayString(),
                 batch: selectedBatch === "all" ? "morning" : selectedBatch,
             });
             try {

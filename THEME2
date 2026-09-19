@@ -1,0 +1,23 @@
+import fs from "node:fs";
+const SRC = "C:/Users/Hi/Desktop/gym-management-system/client/src";
+const files = [];
+(function w(d) {
+  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = d + "/" + e.name;
+    if (e.isDirectory()) w(p);
+    else if (/\.(jsx|js)$/.test(e.name)) files.push(p);
+  }
+})(SRC);
+
+console.log("=== which component/jx files reference a top navbar or header bar ===");
+for (const f of files) {
+  const s = fs.readFileSync(f, "utf8");
+  const hits = [];
+  if (/<SheetTrigger|<SheetHeader|<SheetTitle/.test(s)) hits.push("sheet");
+  if (/SidebarProvider|SidebarInset|SidebarTrigger/.test(s)) hits.push("sidebar-shell");
+  if (/Navbar|NavBar|navbar/.test(s)) hits.push("navbar");
+  if (/<header\b/.test(s)) hits.push("<header>");
+  if (/sticky\b|position:\s*sticky/.test(s)) hits.push("sticky");
+  if (/ThemeToggle|ModeToggle|theme-toggle|mode-toggle|ThemeModeToggle/.test(s)) hits.push("theme-toggle");
+  if (hits.length) console.log(s.replace(/\n/g, " | ") + ""));
+}
