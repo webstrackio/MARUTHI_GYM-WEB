@@ -1,4 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
+import { motion } from "framer-motion";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -21,6 +22,12 @@ import NotFound from "@/pages/not-found";
 import { useRole, logout, getStudentSession } from "@/lib/auth";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { LogOut } from "lucide-react";
+function PageTransition({ children }) {
+    const [location] = useLocation();
+    return (<motion.div key={location} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: "easeOut" }} className="h-full">
+      {children}
+    </motion.div>);
+}
 function Router() {
     const [location] = useLocation();
     const role = useRole();
@@ -92,7 +99,9 @@ function App() {
                   </header>
                   <main className="flex-1 overflow-auto p-6 bg-background">
                     <div className="max-w-7xl mx-auto">
-                      <Router />
+                      <PageTransition>
+                        <Router />
+                      </PageTransition>
                     </div>
                   </main>
                 </div>
