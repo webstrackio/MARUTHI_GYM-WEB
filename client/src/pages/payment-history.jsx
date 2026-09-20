@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose, } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
@@ -227,7 +228,7 @@ export default function PaymentHistory() {
               <FormField control={form.control} name="date" render={({ field }) => (<FormItem>
                     <FormLabel>Payment Date *</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-payment-date"/>
+                      <DateInput value={field.value} onChange={(v) => field.onChange(v)} label="Payment Date" data-testid="input-payment-date" data-testid-calendar="calendar-payment-date"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>)}/>

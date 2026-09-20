@@ -4,6 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, } from "@/components/ui/dialog";
@@ -342,7 +343,7 @@ export default function DailyIncome() {
               <FormField control={form.control} name="date" render={({ field }) => (<FormItem>
                     <FormLabel>Payment Date *</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-payment-date"/>
+                      <DateInput value={field.value} onChange={(v) => field.onChange(v)} label="Payment Date" data-testid="input-payment-date" data-testid-calendar="calendar-payment-date"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>)}/>

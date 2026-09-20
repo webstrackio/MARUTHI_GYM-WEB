@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -494,7 +495,7 @@ export default function Students() {
               <FormField control={form.control} name="joinDate" render={({ field }) => (<FormItem>
                     <FormLabel>Join Date <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-join-date"/>
+                      <DateInput value={field.value} onChange={(v) => field.onChange(v)} label="Join Date" data-testid="input-join-date" data-testid-calendar="calendar-join-date"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>)}/>

@@ -314,3 +314,22 @@
   height: 0;
   display: none;
 }
+
+/* Hide scrollbars globally while keeping full scrolling functionality.
+   Applies consistently to every table, card, container, and screen so no
+   horizontal (or vertical) scrollbar is ever visible. Content remains
+   scrollable with touch, trackpad, mouse wheel, and shift+wheel. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Legacy Edge / IE */
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0; /* Hide the horizontal scrollbar at the bottom */
+  display: none; /* WebKit / Blink */
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 0;
+}
