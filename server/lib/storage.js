@@ -155,15 +155,20 @@ export class DrizzleStorage {
   }
   async getDailyIncome(dateStr) {
     const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : todayString();
-    const allPayments = await db.select().from(payments);
+    const [allPayments, allStudents] = await Promise.all([
+      db.select().from(payments),
+      db.select().from(students),
+    ]);
     const summarize = (list, date) => {
       const cash = list.filter((p) => p.paymentMethod === "cash").reduce((sum, p) => sum + p.amount, 0);
       const online = list.filter((p) => p.paymentMethod === "online").reduce((sum, p) => sum + p.amount, 0);
       return { date, cash, online, total: cash + online, count: list.length };
     };
+    const studentPhoneById = new Map(allStudents.map((s) => [s.id, s.phone]));
     const dayPayments = allPayments
       .filter((p) => p.date === targetDate)
-      .sort((a, b) => b.id - a.id);
+      .sort((a, b) => b.id - a.id)
+      .map((p) => ({ ...p, phone: studentPhoneById.get(p.studentId) ?? "" }));
     const last7Days = [];
     for (let i = 6; i >= 0; i--) {
       const day = addDays(targetDate, -i);

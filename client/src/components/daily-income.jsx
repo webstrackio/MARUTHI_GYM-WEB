@@ -257,7 +257,7 @@ export default function DailyIncome() {
                     <TableCell className="tabular-nums">{formatCurrency(dayItem.cash)}</TableCell>
                     <TableCell className="tabular-nums">{formatCurrency(dayItem.online)}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatCurrency(dayItem.total)}</TableCell>
-                    <TableCell><Badge variant="secondary">{dayItem.count}</Badge></TableCell>
+                    <TableCell><Badge variant={dayItem.count > 0 ? "destructive" : "secondary"}>{dayItem.count}</Badge></TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => setViewDate(dayItem.date)} data-testid={`button-view-payments-${dayItem.date}`}>
                         <Eye className="h-4 w-4 mr-1"/>
@@ -283,11 +283,11 @@ export default function DailyIncome() {
               <Inbox className="h-8 w-8 mx-auto mb-2 opacity-30"/>
               No payments recorded for this date
             </div>) : (<div className="max-h-96 overflow-auto rounded-md border">
-              <Table>
+              <Table className="min-w-[720px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Token #</TableHead>
                     <TableHead>Student</TableHead>
+                    <TableHead>Mobile Number</TableHead>
                     <TableHead>Register No.</TableHead>
                     <TableHead>Method</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
@@ -296,8 +296,8 @@ export default function DailyIncome() {
                 </TableHeader>
                 <TableBody>
                   {visiblePayments.map((payment) => (<TableRow key={payment.id} data-testid={`dialog-payment-${payment.id}`}>
-                      <TableCell className="font-medium">{payment.tokenNumber}</TableCell>
-                      <TableCell>{payment.studentName}</TableCell>
+                      <TableCell className="font-medium">{payment.studentName}</TableCell>
+                      <TableCell className="tabular-nums">{payment.phone || "-"}</TableCell>
                       <TableCell>{payment.registerNo}</TableCell>
                       <TableCell>
                         <div className={`flex items-center gap-2 w-fit px-3 py-1 rounded-md ${payment.paymentMethod === "cash"
