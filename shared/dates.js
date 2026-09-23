@@ -43,6 +43,27 @@ export function formatDate(date) {
     return `${day}/${month}/${dt.getFullYear()}`;
 }
 
+// Converts a stored timestamp (ISO UTC string or Date) to Indian Standard
+// Time (IST - Asia/Kolkata, UTC+5:30) and formats it as a simple clock time
+// such as "7:02 PM". Display-only: the stored timestamp itself is never
+// modified, regardless of the device's local timezone.
+// Example: "2026-09-23T13:32:00.000Z" displays as "7:02 PM".
+export function formatTimeIST(value) {
+    if (value === null || value === undefined || value === "") {
+        return "";
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) {
+        return String(value);
+    }
+    return new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+    }).format(date);
+}
+
 // Parses a "YYYY-MM-DD" date string as a *local* midnight date so calendar-day
 // arithmetic stays stable regardless of the current time of day.
 export function parseDateString(dateStr) {

@@ -9,13 +9,24 @@ export default async function handler(req, res) {
       if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
       }
+      const allowedFields = {};
+      if (req.body.date !== undefined) allowedFields.date = req.body.date;
+      if (req.body.amount !== undefined) allowedFields.amount = req.body.amount;
+      if (req.body.paymentMethod !== undefined) allowedFields.paymentMethod = req.body.paymentMethod;
       if (req.body.duration !== undefined) {
         const durationMonths = Number(req.body.duration);
         if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > 120) {
           return res.status(400).json({ error: "Duration must be a whole number of months (1 - 120)" });
         }
+        allowedFields.duration = durationMonths;
       }
-      const updatedPayment = await storage.updatePayment(id, req.body);
+      // createdAt (payment time), tokenNumber and id are written once when the
+      // payment is created and are never updatable, so the saved payment
+      // timestamp can never change on edit.
+      if (Object.keys(allowedFields).length === 0) {
+        return res.json(payment);
+      }
+      const updatedPayment = await storage.updatePayment(id, allowedFields);
       await storage.recomputeStudentExpiry(updatedPayment.studentId);
       res.json(updatedPayment);
     } catch (error) {

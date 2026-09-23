@@ -37,31 +37,40 @@ export default async function handler(req, res) {
       const now = new Date();
       const daysLeft = Math.max(0, daysUntil(student.expiryDate));
       const isExpired = !student.expiryDate || daysLeft <= 0;
+      const today = todayString();
+      // Saved payment timestamp from the database (written once when the fee
+      // was paid) - never the current time.
+      const latestPayment = await storage.getLatestPaymentByStudentId(student.id);
+      const paymentDate = latestPayment?.date ?? null;
+      const paymentTime = latestPayment?.createdAt ?? null;
+      const studentInfo = {
+        name: student.name,
+        registerNumber: student.registerNo,
+        expiryDate: student.expiryDate,
+        joinDate: student.joinDate,
+      };
       if (isExpired) {
         return res.status(200).json({
           type: "expired",
           message: "You have to pay the fees",
-          student: {
-            name: student.name,
-            registerNumber: student.registerNo,
-            expiryDate: student.expiryDate,
-          },
+          date: today,
+          paymentDate,
+          paymentTime,
+          student: studentInfo,
           daysLeft,
           isExpired: true,
         });
       }
-      const today = todayString();
       const existingRecord = await storage.getAttendanceByDate(today);
       const alreadyMarked = existingRecord.some((r) => r.registerNo === registerNoString);
       if (alreadyMarked) {
         return res.status(200).json({
           type: "warning",
           message: "Attendance already marked for today",
-          student: {
-            name: student.name,
-            registerNumber: student.registerNo,
-            expiryDate: student.expiryDate,
-          },
+          date: today,
+          paymentDate,
+          paymentTime,
+          student: studentInfo,
           daysLeft,
           isExpired: false,
         });
@@ -76,12 +85,11 @@ export default async function handler(req, res) {
       res.status(200).json({
         type: "success",
         message: "Attendance marked successfully",
+        date: today,
         timeIn,
-        student: {
-          name: student.name,
-          registerNumber: student.registerNo,
-          expiryDate: student.expiryDate,
-        },
+        paymentDate,
+        paymentTime,
+        student: studentInfo,
         daysLeft,
         isExpired: false,
       });

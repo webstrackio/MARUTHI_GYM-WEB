@@ -223,13 +223,27 @@ export async function registerRoutes(app) {
             if (!payment) {
                 return res.status(404).json({ error: "Payment not found" });
             }
+            const allowedFields = {};
+            if (req.body.date !== undefined)
+                allowedFields.date = req.body.date;
+            if (req.body.amount !== undefined)
+                allowedFields.amount = req.body.amount;
+            if (req.body.paymentMethod !== undefined)
+                allowedFields.paymentMethod = req.body.paymentMethod;
             if (req.body.duration !== undefined) {
                 const durationMonths = Number(req.body.duration);
                 if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > 120) {
                     return res.status(400).json({ error: "Duration must be a whole number of months (1 - 120)" });
                 }
+                allowedFields.duration = durationMonths;
             }
-            const updatedPayment = await storage.updatePayment(id, req.body);
+            // createdAt (payment time), tokenNumber and id are written once when
+            // the payment is created and are never updatable, so the saved
+            // payment timestamp can never change on edit.
+            if (Object.keys(allowedFields).length === 0) {
+                return res.json(payment);
+            }
+            const updatedPayment = await storage.updatePayment(id, allowedFields);
             await storage.recomputeStudentExpiry(updatedPayment.studentId);
             res.json(updatedPayment);
         }
@@ -318,33 +332,42 @@ export async function registerRoutes(app) {
             const daysLeft = Math.max(0, daysUntil(student.expiryDate));
             // Expired if: no expiry date OR days left <= 0
             const isExpired = !student.expiryDate || daysLeft <= 0;
+            const today = todayString();
+            // Saved payment timestamp from the database (written once when the
+            // fee was paid) - never the current time.
+            const latestPayment = await storage.getLatestPaymentByStudentId(student.id);
+            const paymentDate = latestPayment?.date ?? null;
+            const paymentTime = latestPayment?.createdAt ?? null;
+            const studentInfo = {
+                name: student.name,
+                registerNumber: student.registerNo,
+                expiryDate: student.expiryDate,
+                joinDate: student.joinDate
+            };
             // Step 3: Check if expired FIRST - don't insert for expired members
             if (isExpired) {
                 return res.status(200).json({
                     type: "expired",
                     message: "You have to pay the fees",
-                    student: {
-                        name: student.name,
-                        registerNumber: student.registerNo,
-                        expiryDate: student.expiryDate
-                    },
+                    date: today,
+                    paymentDate,
+                    paymentTime,
+                    student: studentInfo,
                     daysLeft,
                     isExpired: true
                 });
             }
             // Step 4: Check if already marked today (only for active members)
-            const today = todayString();
             const existingRecord = await storage.getAttendanceByDate(today);
             const alreadyMarked = existingRecord.some((r) => r.registerNo === registerNoString);
             if (alreadyMarked) {
                 return res.status(200).json({
                     type: "warning",
                     message: "Attendance already marked for today",
-                    student: {
-                        name: student.name,
-                        registerNumber: student.registerNo,
-                        expiryDate: student.expiryDate
-                    },
+                    date: today,
+                    paymentDate,
+                    paymentTime,
+                    student: studentInfo,
                     daysLeft,
                     isExpired: false
                 });
@@ -361,12 +384,11 @@ export async function registerRoutes(app) {
             res.status(200).json({
                 type: "success",
                 message: "Attendance marked successfully",
+                date: today,
                 timeIn,
-                student: {
-                    name: student.name,
-                    registerNumber: student.registerNo,
-                    expiryDate: student.expiryDate
-                },
+                paymentDate,
+                paymentTime,
+                student: studentInfo,
                 daysLeft,
                 isExpired: false
             });

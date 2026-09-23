@@ -11,7 +11,7 @@ export const students = pgTable("students", {
     joinDate: date("join_date").notNull(),
     expiryDate: date("expiry_date"),
     batch: varchar("batch", { length: 20 }).notNull().default("morning"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 export function normalizeBatch(value) {
     if (value === null || value === undefined) {
@@ -56,7 +56,7 @@ export const payments = pgTable("payments", {
     duration: integer("duration").notNull(), // in calendar months
     amount: integer("amount").notNull(), // in rupees
     paymentMethod: varchar("payment_method", { length: 20 }).notNull(), // 'cash' or 'online'
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 export const insertPaymentSchema = createInsertSchema(payments).omit({
     id: true,
