@@ -249,7 +249,7 @@ export async function registerRoutes(app) {
         }
         catch (error) {
             console.error(`PATCH /api/payments/${req.params.id} failed:`, error);
-            res.status(500).json({ error: "Failed to update payment" });
+            res.status(500).json({ error: error.message || "Failed to update payment" });
         }
     });
     app.delete("/api/payments/:id", async (req, res) => {
@@ -265,7 +265,7 @@ export async function registerRoutes(app) {
         }
         catch (error) {
             console.error(`DELETE /api/payments/${req.params.id} failed:`, error);
-            res.status(500).json({ error: "Failed to delete payment" });
+            res.status(500).json({ error: error.message || "Failed to delete payment" });
         }
     });
     // Income stats

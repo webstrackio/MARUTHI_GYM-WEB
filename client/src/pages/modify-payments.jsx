@@ -53,8 +53,9 @@ export default function ModifyPayments() {
             setEditingPayment(null);
             form.reset();
         },
-        onError: () => {
-            toast({ title: "Failed to update payment", variant: "destructive" });
+        onError: (error) => {
+            console.error("Update payment failed:", error);
+            toast({ title: error?.message || "Failed to update payment", variant: "destructive" });
         },
     });
     const deleteMutation = useMutation({
@@ -67,8 +68,9 @@ export default function ModifyPayments() {
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             toast({ title: "Payment deleted successfully" });
         },
-        onError: () => {
-            toast({ title: "Failed to delete payment", variant: "destructive" });
+        onError: (error) => {
+            console.error("Delete payment failed:", error);
+            toast({ title: error?.message || "Failed to delete payment", variant: "destructive" });
         },
     });
     const handleOpenDialog = (payment) => {

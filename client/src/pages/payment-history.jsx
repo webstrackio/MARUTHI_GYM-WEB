@@ -56,8 +56,9 @@ export default function PaymentHistory() {
             setEditingPayment(null);
             form.reset();
         },
-        onError: () => {
-            toast({ title: "Failed to update payment", variant: "destructive" });
+        onError: (error) => {
+            console.error("Update payment failed:", error);
+            toast({ title: error?.message || "Failed to update payment", variant: "destructive" });
         },
     });
     const deleteMutation = useMutation({
@@ -71,8 +72,9 @@ export default function PaymentHistory() {
             toast({ title: "Payment deleted successfully" });
             setDeleteConfirmId(null);
         },
-        onError: () => {
-            toast({ title: "Failed to delete payment", variant: "destructive" });
+        onError: (error) => {
+            console.error("Delete payment failed:", error);
+            toast({ title: error?.message || "Failed to delete payment", variant: "destructive" });
         },
     });
     const filteredPayments = payments?.filter((payment) => {

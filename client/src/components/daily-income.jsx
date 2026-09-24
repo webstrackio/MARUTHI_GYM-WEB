@@ -58,13 +58,14 @@ export default function DailyIncome() {
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
-            queryClient.invalidateQueries({ queryKey: [/payments/] });
+            queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
             toast({ title: "Payment updated successfully" });
             setEditingPayment(null);
             form.reset();
         },
-        onError: () => {
-            toast({ title: "Failed to update payment", variant: "destructive" });
+        onError: (error) => {
+            console.error("Update payment failed:", error);
+            toast({ title: error?.message || "Failed to update payment", variant: "destructive" });
         },
     });
     const deleteMutation = useMutation({
@@ -74,12 +75,13 @@ export default function DailyIncome() {
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
-            queryClient.invalidateQueries({ queryKey: [/payments/] });
+            queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
             toast({ title: "Payment deleted successfully" });
             setDeleteConfirmId(null);
         },
-        onError: () => {
-            toast({ title: "Failed to delete payment", variant: "destructive" });
+        onError: (error) => {
+            console.error("Delete payment failed:", error);
+            toast({ title: error?.message || "Failed to delete payment", variant: "destructive" });
         },
     });
     const day = data?.day;
@@ -96,7 +98,7 @@ export default function DailyIncome() {
     };
     const onSubmit = (values) => {
         if (editingPayment) {
-            updateMutation.mutate({ ...values, id: editingPayment.id });
+            updateMutation.mutate({ ...values, duration: values.durationMonths, id: editingPayment.id });
         }
     };
     const visiblePayments = viewData?.payments ?? [];

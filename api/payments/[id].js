@@ -1,10 +1,23 @@
 import { storage } from "../../server/lib/storage.js";
 
+// Vercel's file-based functions expose dynamic route segments through
+// `req.query` (e.g. req.query.id), not `req.params` which is an Express
+// concept. Support both so the same handler works on Vercel and in the
+// local Express server.
+function paymentIdFrom(req) {
+  const raw = req.query?.id ?? req.params?.id;
+  const id = parseInt(raw, 10);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export default async function handler(req, res) {
-  const id = parseInt(req.params.id, 10);
+  const id = paymentIdFrom(req);
 
   if (req.method === "PATCH") {
     try {
+      if (id === null) {
+        return res.status(400).json({ error: "Valid payment id is required" });
+      }
       const payment = await storage.getPaymentById(id);
       if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
@@ -31,20 +44,23 @@ export default async function handler(req, res) {
       res.json(updatedPayment);
     } catch (error) {
       console.error(`PATCH /api/payments/${id} failed:`, error);
-      res.status(500).json({ error: "Failed to update payment" });
+      res.status(500).json({ error: error.message || "Failed to update payment" });
     }
   } else if (req.method === "DELETE") {
     try {
-      const payment = await storage.getPaymentById(parseInt(id));
+      if (id === null) {
+        return res.status(400).json({ error: "Valid payment id is required" });
+      }
+      const payment = await storage.getPaymentById(id);
       if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
       }
-      await storage.deletePayment(parseInt(id));
+      await storage.deletePayment(id);
       await storage.recomputeStudentExpiry(payment.studentId);
       res.status(204).send();
     } catch (error) {
       console.error(`DELETE /api/payments/${id} failed:`, error);
-      res.status(500).json({ error: "Failed to delete payment" });
+      res.status(500).json({ error: error.message || "Failed to delete payment" });
     }
   } else {
     res.status(405).json({ error: "Method not allowed" });
