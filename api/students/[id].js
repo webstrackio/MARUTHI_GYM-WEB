@@ -1,5 +1,5 @@
 import { storage } from "../../server/lib/storage.js";
-import { normalizeBatch } from "../../shared/schema.js";
+import { normalizeBatch, normalizePhone } from "../../shared/schema.js";
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -23,7 +23,21 @@ export default async function handler(req, res) {
       }
       const allowedFields = {};
       if (req.body.name !== undefined) allowedFields.name = req.body.name;
-      if (req.body.phone !== undefined) allowedFields.phone = req.body.phone;
+      if (req.body.phone !== undefined) {
+        const normalizedPhone = normalizePhone(req.body.phone);
+        if (!/^[0-9]{10}$/.test(normalizedPhone)) {
+          return res.status(400).json({ error: "Phone number must be exactly 10 digits" });
+        }
+        const duplicate = await storage.getStudentByPhone(normalizedPhone);
+        if (duplicate && duplicate.id !== parseInt(id)) {
+          return res.status(409).json({
+            error: "This phone number is already registered",
+            conflict: true,
+            student: duplicate,
+          });
+        }
+        allowedFields.phone = normalizedPhone;
+      }
       if (req.body.address !== undefined) allowedFields.address = req.body.address;
       if (req.body.joinDate !== undefined) allowedFields.joinDate = req.body.joinDate;
       if (req.body.expiryDate !== undefined) allowedFields.expiryDate = req.body.expiryDate;

@@ -1,8 +1,8 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq, sql } from "drizzle-orm";
-import { students, payments, attendance, normalizeBatch } from "../../shared/schema.js";
-import { addCalendarMonths, toDateInputValue } from "../../shared/dates.js";
+import { students, payments, attendance, normalizeBatch, normalizePhone } from "../../shared/schema.js";
+import { addDays, calcExpiryDate, todayString } from "../../shared/dates.js";
 
 const client = postgres(process.env.DATABASE_URL, {
   ssl: { rejectUnauthorized: false },
@@ -25,6 +25,10 @@ export class DrizzleStorage {
     const result = await db.select().from(students).where(eq(students.registerNo, registerNo));
     return normalizeStudent(result[0]);
   }
+  async getStudentByPhone(phone) {
+    const result = await db.select().from(students).where(eq(students.phone, phone));
+    return normalizeStudent(result[0]);
+  }
   async getNextRegisterNo() {
     const allStudents = await db.select().from(students);
     const maxRegisterNo = allStudents.reduce((max, s) => {
@@ -34,11 +38,12 @@ export class DrizzleStorage {
     return String(maxRegisterNo + 1);
   }
   async createStudent(student) {
-    const result = await db.insert(students).values(student).returning();
+    const result = await db.insert(students).values({ ...student, phone: normalizePhone(student.phone) }).returning();
     return normalizeStudent(result[0]);
   }
   async updateStudent(id, student) {
-    const result = await db.update(students).set(student).where(eq(students.id, id)).returning();
+    const patch = student.phone !== undefined ? { ...student, phone: normalizePhone(student.phone) } : student;
+    const result = await db.update(students).set(patch).where(eq(students.id, id)).returning();
     return normalizeStudent(result[0]);
   }
   async deleteStudent(id) {
@@ -50,6 +55,15 @@ export class DrizzleStorage {
   async getPaymentById(id) {
     const result = await db.select().from(payments).where(eq(payments.id, id));
     return result[0];
+  }
+  async getLatestPaymentByStudentId(studentId) {
+    const result = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.studentId, studentId))
+      .orderBy(sql`${payments.id} desc`)
+      .limit(1);
+    return result[0] ?? null;
   }
   async createPayment(payment) {
     const result = await db.insert(payments).values(payment).returning();
@@ -75,7 +89,7 @@ export class DrizzleStorage {
     for (const p of studentPayments) {
       const baseDate =
         expiry && new Date(expiry) > new Date(p.date) ? new Date(expiry) : new Date(p.date);
-      expiry = toDateInputValue(addCalendarMonths(baseDate, p.duration));
+            expiry = calcExpiryDate(baseDate, p.duration);
       await db.update(payments).set({ startDate: p.date, expiryDate: expiry }).where(eq(payments.id, p.id));
     }
     await db.update(students).set({ expiryDate: expiry }).where(eq(students.id, studentId));
@@ -89,7 +103,7 @@ export class DrizzleStorage {
   }
   async getDashboardStats() {
     const allStudents = await db.select().from(students);
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayString();
     const todayAttendanceRows = await db.select().from(attendance).where(eq(attendance.date, today));
     const now = new Date();
     const activeMemberships = allStudents.filter((s) => {
@@ -146,6 +160,34 @@ export class DrizzleStorage {
       monthlyBreakdown,
       averageMonthlyIncome,
       totalPaymentsReceived: allPayments.length,
+    };
+  }
+  async getDailyIncome(dateStr) {
+    const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : todayString();
+    const [allPayments, allStudents] = await Promise.all([
+      db.select().from(payments),
+      db.select().from(students),
+    ]);
+    const summarize = (list, date) => {
+      const cash = list.filter((p) => p.paymentMethod === "cash").reduce((sum, p) => sum + p.amount, 0);
+      const online = list.filter((p) => p.paymentMethod === "online").reduce((sum, p) => sum + p.amount, 0);
+      return { date, cash, online, total: cash + online, count: list.length };
+    };
+    const studentPhoneById = new Map(allStudents.map((s) => [s.id, s.phone]));
+    const dayPayments = allPayments
+      .filter((p) => p.date === targetDate)
+      .sort((a, b) => b.id - a.id)
+      .map((p) => ({ ...p, phone: studentPhoneById.get(p.studentId) ?? "" }));
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = addDays(targetDate, -i);
+      last7Days.push(summarize(allPayments.filter((p) => p.date === day), day));
+    }
+    return {
+      selectedDate: targetDate,
+      day: summarize(dayPayments, targetDate),
+      payments: dayPayments,
+      last7Days,
     };
   }
 }

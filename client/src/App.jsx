@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -22,6 +22,12 @@ import NotFound from "@/pages/not-found";
 import { useRole, logout, getStudentSession } from "@/lib/auth";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { LogOut } from "lucide-react";
+function PageTransition({ children }) {
+    const [location] = useLocation();
+    return (<motion.div key={location} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: "easeOut" }} className="h-full">
+      {children}
+    </motion.div>);
+}
 function Router() {
     const [location] = useLocation();
     const role = useRole();
@@ -47,8 +53,7 @@ function Router() {
         <Route component={NotFound}/>
       </Switch>);
     }
-    const noAnimation = ["/settings", "/income-dashboard", "/students"].includes(location);
-    const page = (<Switch>
+    return (<Switch>
       <Route path="/" component={Dashboard}/>
       <Route path="/students" component={Students}/>
       <Route path="/payments" component={Payments}/>
@@ -60,14 +65,6 @@ function Router() {
       <Route path="/settings" component={GymSettings}/>
       <Route component={NotFound}/>
     </Switch>);
-    if (noAnimation) {
-        return page;
-    }
-    return (<AnimatePresence mode="wait">
-      <motion.div key={location} initial={{ opacity: 0, scale: 0.94, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 1.04, y: -8 }} transition={{ type: "spring", stiffness: 240, damping: 24, mass: 1 }}>
-        {page}
-      </motion.div>
-    </AnimatePresence>);
 }
 function App() {
     const role = useRole();
@@ -102,7 +99,9 @@ function App() {
                   </header>
                   <main className="flex-1 overflow-auto p-6 bg-background">
                     <div className="max-w-7xl mx-auto">
-                      <Router />
+                      <PageTransition>
+                        <Router />
+                      </PageTransition>
                     </div>
                   </main>
                 </div>

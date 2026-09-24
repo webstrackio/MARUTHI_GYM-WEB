@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Delete, Check, AlertTriangle, CheckCircle } from "lucide-react";
+import { formatDate, formatTimeIST } from "@shared/dates";
 export default function AttendancePad() {
     const [registerNumber, setRegisterNumber] = useState("");
     const [previewData, setPreviewData] = useState(null);
@@ -30,13 +31,6 @@ export default function AttendancePad() {
         }
         setLoading(true);
         try {
-            const now = new Date();
-            const timeInStr = now.toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: true,
-            });
             const response = await fetch("/api/attendance", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -45,12 +39,7 @@ export default function AttendancePad() {
                 }),
             });
             const data = await response.json();
-            console.log("API Response:", data);
-            // Set preview data with timeIn
-            setPreviewData({
-                ...data,
-                timeIn: timeInStr,
-            });
+            setPreviewData(data);
             // Auto-clear after 4 seconds
             setTimeout(() => {
                 setRegisterNumber("");
@@ -146,16 +135,16 @@ export default function AttendancePad() {
                 <p className={`font-bold text-2xl ${previewStyle.textColor}`}>{previewData.student.name}</p>
               </div>
 
-              <div>
-                <p className="text-muted-foreground text-sm mb-2">Date</p>
-                <p className={`font-bold text-xl ${previewStyle.textColor}`}>
-                  {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "2-digit" })}
-                </p>
-              </div>
+              {previewData.date && (<div>
+                  <p className="text-muted-foreground text-sm mb-2">Date</p>
+                  <p className={`font-bold text-xl ${previewStyle.textColor}`}>
+                    {formatDate(previewData.date)}
+                  </p>
+                </div>)}
 
               {previewData.timeIn && previewData.type === "success" && (<div>
                   <p className="text-muted-foreground text-sm mb-2">Time In</p>
-                  <p className={`font-bold text-xl ${previewStyle.textColor}`}>{previewData.timeIn}</p>
+                  <p className={`font-bold text-xl ${previewStyle.textColor}`}>{formatTimeIST(previewData.timeIn)}</p>
                 </div>)}
 
               {previewData.daysLeft !== undefined && (<div>

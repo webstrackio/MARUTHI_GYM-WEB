@@ -6,12 +6,12 @@ export const students = pgTable("students", {
     id: serial("id").primaryKey(),
     registerNo: varchar("register_no", { length: 50 }).notNull().unique(),
     name: text("name").notNull(),
-    phone: varchar("phone", { length: 20 }).notNull(),
+    phone: varchar("phone", { length: 20 }).notNull().unique(),
     address: text("address").notNull(),
     joinDate: date("join_date").notNull(),
     expiryDate: date("expiry_date"),
     batch: varchar("batch", { length: 20 }).notNull().default("morning"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 export function normalizeBatch(value) {
     if (value === null || value === undefined) {
@@ -19,6 +19,19 @@ export function normalizeBatch(value) {
     }
     const key = String(value).trim().toLowerCase();
     return key.includes("evening") ? "evening" : "morning";
+}
+export function normalizePhone(value) {
+    if (value === null || value === undefined) {
+        return "";
+    }
+    let digits = String(value).replace(/[^0-9]/g, "");
+    if (digits.length === 13 && digits.startsWith("091")) {
+        return digits.slice(3);
+    }
+    if (digits.length === 12 && digits.startsWith("91")) {
+        return digits.slice(2);
+    }
+    return digits;
 }
 export const insertStudentSchema = createInsertSchema(students).omit({
     id: true,
@@ -43,7 +56,7 @@ export const payments = pgTable("payments", {
     duration: integer("duration").notNull(), // in calendar months
     amount: integer("amount").notNull(), // in rupees
     paymentMethod: varchar("payment_method", { length: 20 }).notNull(), // 'cash' or 'online'
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 export const insertPaymentSchema = createInsertSchema(payments).omit({
     id: true,

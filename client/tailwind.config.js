@@ -1,4 +1,4 @@
-import tailwindcssAnimate from "tailwindcss-animate";
+
 import typography from "@tailwindcss/typography";
 
 export default {
@@ -100,5 +100,5 @@ export default {
       animation: {},
     },
   },
-  plugins: [tailwindcssAnimate, typography],
+  plugins: [typography],
 };

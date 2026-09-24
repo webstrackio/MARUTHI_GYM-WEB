@@ -1,12 +1,32 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { animate, motion, useInView } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, UserCheck, UserX, CalendarCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGymSettings } from "@/hooks/use-gym-settings";
-import { daysUntil, parseDateString } from "@shared/dates";
+import { daysUntil, formatDate, parseDateString } from "@shared/dates";
 import { useToday } from "@/hooks/use-today";
+function CountUp({ value, delay = 0 }) {
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true, margin: "-40px" });
+    const [display, setDisplay] = useState(0);
+    useEffect(() => {
+        if (!inView)
+            return;
+        const controls = animate(0, value, {
+            duration: 1,
+            delay,
+            ease: "easeOut",
+            onUpdate: (latest) => {
+                setDisplay(Math.round(latest));
+            },
+        });
+        return () => controls.stop();
+    }, [inView, value, delay]);
+    return <span ref={ref}>{display}</span>;
+}
 export default function Dashboard() {
     const { settings } = useGymSettings();
     const todayDate = parseDateString(useToday());
@@ -67,24 +87,20 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, index) => (<motion.div key={stat.title} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: "easeOut", delay: index * 0.04 }} whileHover={{
-                scale: [1, 1.06, 1],
-                y: [0, -6, 0],
-                transition: { duration: 1.4, ease: "easeInOut", repeat: Infinity },
-            }}>
+        {statCards.map((stat, index) => (<motion.div key={stat.title} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut", delay: index * 0.1 } }} whileHover={{ y: -3, transition: { duration: 0.12, ease: "easeOut" } }} transition={{ duration: 0.2, ease: "easeOut" }}>
             <Link href={stat.href} data-testid={`card-link-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
-              <Card className="cursor-pointer transition-all duration-200 hover:shadow-md" data-testid={`card-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
+              <Card className="cursor-pointer transition-shadow duration-300 hover:shadow-md" data-testid={`card-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
                     {stat.title}
                   </CardTitle>
-                  <div className={`h-8 w-8 rounded-md ${stat.bgColor} flex items-center justify-center`}>
+                  <motion.div className={`h-8 w-8 rounded-md ${stat.bgColor} flex items-center justify-center`} initial={{ scale: 0.8, opacity: 0.6 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.3, ease: "easeOut", delay: index * 0.1 + 0.3 }}>
                     <stat.icon className="h-4 w-4 text-white"/>
-                  </div>
+                  </motion.div>
                 </CardHeader>
                 <CardContent>
                   {isLoading ? (<Skeleton className="h-10 w-20"/>) : (<p className="text-3xl font-bold text-foreground" data-testid={`text-${stat.title.toLowerCase().replace(/\s+/g, '-')}-value`}>
-                      {stat.value}
+                      <CountUp value={stat.value} delay={index * 0.1 + 0.3}/>
                     </p>)}
                 </CardContent>
               </Card>
@@ -92,14 +108,7 @@ export default function Dashboard() {
           </motion.div>))}
       </div>
 
-      <motion.div whileHover={{
-            boxShadow: [
-                "0 0 0px 0px rgba(239, 68, 68, 0)",
-                "0 0 26px 2px rgba(239, 68, 68, 0.25)",
-                "0 0 0px 0px rgba(239, 68, 68, 0)",
-            ],
-            transition: { duration: 1.2, ease: "easeInOut", repeat: Infinity },
-        }}>
+      <div>
         <Card className="bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-200">
@@ -116,11 +125,11 @@ export default function Dashboard() {
             {expiredMembers.length === 0 ? (<p className="text-sm text-muted-foreground py-2" data-testid="no-expired-memberships">
                 All memberships are up to date.
               </p>) : (<div className="space-y-3">
-                {expiredMembers.map((member, index) => (<motion.div key={member.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index * 0.04, 0.24) }} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-md" data-testid={`expired-member-${member.id}`}>
+                {expiredMembers.map((member) => (<div key={member.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-md" data-testid={`expired-member-${member.id}`}>
                     <div>
                       <p className="font-semibold text-foreground">{member.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Reg: {member.registerNo} · Expired: {member.expiryDate ?? "Never paid"}
+                        Reg: {member.registerNo} · Expired: {member.expiryDate ? formatDate(member.expiryDate) : "Never paid"}
                       </p>
                     </div>
                     <div className="text-right">
@@ -131,10 +140,10 @@ export default function Dashboard() {
                     : "No payment recorded"}
                       </p>
                     </div>
-                  </motion.div>))}
+                  </div>))}
               </div>)}
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
     </div>);
 }

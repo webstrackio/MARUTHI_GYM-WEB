@@ -1,7 +1,7 @@
 import { createServer } from "http";
 import { storage } from "./storage.js";
-import { insertStudentSchema, insertPaymentSchema, normalizeBatch } from "../shared/schema.js";
-import { addCalendarMonths, toDateInputValue, daysUntil } from "../shared/dates.js";
+import { insertStudentSchema, insertPaymentSchema, normalizeBatch, normalizePhone } from "../shared/schema.js";
+import { calcExpiryDate, daysUntil, isDateString, todayString } from "../shared/dates.js";
 export async function registerRoutes(app) {
     // Dashboard stats
     app.get("/api/dashboard/stats", async (_req, res) => {
@@ -51,6 +51,20 @@ export async function registerRoutes(app) {
     });
     app.post("/api/students", async (req, res) => {
         try {
+            const normalizedPhone = normalizePhone(req.body.phone);
+            if (!/^[0-9]{10}$/.test(normalizedPhone)) {
+                return res.status(400).json({ error: "Phone number must be exactly 10 digits" });
+            }
+            // A phone number must be unique across the whole database, regardless
+            // of batch or membership status.
+            const existingPhone = await storage.getStudentByPhone(normalizedPhone);
+            if (existingPhone) {
+                return res.status(409).json({
+                    error: "This phone number is already registered",
+                    conflict: true,
+                    student: existingPhone,
+                });
+            }
             // Register number is generated automatically from the backend to
             // guarantee it is numeric, sequential and unique.
             let registerNo = await storage.getNextRegisterNo();
@@ -64,10 +78,27 @@ export async function registerRoutes(app) {
             }
             const validatedData = insertStudentSchema.parse({
                 ...req.body,
+                phone: normalizedPhone,
                 registerNo,
                 batch: normalizeBatch(req.body.batch),
             });
-            const student = await storage.createStudent(validatedData);
+            let student;
+            try {
+                student = await storage.createStudent(validatedData);
+            }
+            catch (error) {
+                // Database unique constraint is the final protection against
+                // race conditions where two requests insert the same phone at once.
+                if (error && (error.code === "23505" || /unique/i.test(`${error.detail || ""}${error.message || ""}`))) {
+                    const duplicate = await storage.getStudentByPhone(normalizedPhone);
+                    return res.status(409).json({
+                        error: "This phone number is already registered",
+                        conflict: true,
+                        student: duplicate,
+                    });
+                }
+                throw error;
+            }
             res.status(201).json(student);
         }
         catch (error) {
@@ -88,7 +119,21 @@ export async function registerRoutes(app) {
             }
             const allowedFields = {};
             if (req.body.name !== undefined) allowedFields.name = req.body.name;
-            if (req.body.phone !== undefined) allowedFields.phone = req.body.phone;
+            if (req.body.phone !== undefined) {
+                const normalizedPhone = normalizePhone(req.body.phone);
+                if (!/^[0-9]{10}$/.test(normalizedPhone)) {
+                    return res.status(400).json({ error: "Phone number must be exactly 10 digits" });
+                }
+                const duplicate = await storage.getStudentByPhone(normalizedPhone);
+                if (duplicate && duplicate.id !== id) {
+                    return res.status(409).json({
+                        error: "This phone number is already registered",
+                        conflict: true,
+                        student: duplicate,
+                    });
+                }
+                allowedFields.phone = normalizedPhone;
+            }
             if (req.body.address !== undefined) allowedFields.address = req.body.address;
             if (req.body.joinDate !== undefined) allowedFields.joinDate = req.body.joinDate;
             if (req.body.expiryDate !== undefined) allowedFields.expiryDate = req.body.expiryDate;
@@ -144,7 +189,11 @@ export async function registerRoutes(app) {
             const baseDate = student.expiryDate && new Date(student.expiryDate) > new Date(req.body.date)
                 ? new Date(student.expiryDate)
                 : new Date(req.body.date);
-            const expiryDate = toDateInputValue(addCalendarMonths(baseDate, durationMonths));
+            // A manually chosen expiry date (sent as YYYY-MM-DD) overrides the
+            // automatic calculation when provided. Otherwise the automatic
+            // calculation below is used, keeping existing behavior unchanged.
+            const manualExpiryDate = isDateString(req.body.expiryDate) ? req.body.expiryDate : null;
+            const expiryDate = manualExpiryDate ?? calcExpiryDate(baseDate, durationMonths);
             const validatedData = insertPaymentSchema.parse({
                 ...req.body,
                 duration: durationMonths,
@@ -174,19 +223,33 @@ export async function registerRoutes(app) {
             if (!payment) {
                 return res.status(404).json({ error: "Payment not found" });
             }
+            const allowedFields = {};
+            if (req.body.date !== undefined)
+                allowedFields.date = req.body.date;
+            if (req.body.amount !== undefined)
+                allowedFields.amount = req.body.amount;
+            if (req.body.paymentMethod !== undefined)
+                allowedFields.paymentMethod = req.body.paymentMethod;
             if (req.body.duration !== undefined) {
                 const durationMonths = Number(req.body.duration);
                 if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > 120) {
                     return res.status(400).json({ error: "Duration must be a whole number of months (1 - 120)" });
                 }
+                allowedFields.duration = durationMonths;
             }
-            const updatedPayment = await storage.updatePayment(id, req.body);
+            // createdAt (payment time), tokenNumber and id are written once when
+            // the payment is created and are never updatable, so the saved
+            // payment timestamp can never change on edit.
+            if (Object.keys(allowedFields).length === 0) {
+                return res.json(payment);
+            }
+            const updatedPayment = await storage.updatePayment(id, allowedFields);
             await storage.recomputeStudentExpiry(updatedPayment.studentId);
             res.json(updatedPayment);
         }
         catch (error) {
             console.error(`PATCH /api/payments/${req.params.id} failed:`, error);
-            res.status(500).json({ error: "Failed to update payment" });
+            res.status(500).json({ error: error.message || "Failed to update payment" });
         }
     });
     app.delete("/api/payments/:id", async (req, res) => {
@@ -202,7 +265,7 @@ export async function registerRoutes(app) {
         }
         catch (error) {
             console.error(`DELETE /api/payments/${req.params.id} failed:`, error);
-            res.status(500).json({ error: "Failed to delete payment" });
+            res.status(500).json({ error: error.message || "Failed to delete payment" });
         }
     });
     // Income stats
@@ -216,10 +279,20 @@ export async function registerRoutes(app) {
             res.status(500).json({ error: "Failed to fetch income stats" });
         }
     });
+    app.get("/api/income/daily", async (req, res) => {
+        try {
+            const stats = await storage.getDailyIncome(req.query.date);
+            res.json(stats);
+        }
+        catch (error) {
+            console.error("GET /api/income/daily failed:", error);
+            res.status(500).json({ error: "Failed to fetch daily income" });
+        }
+    });
     // Attendance endpoints
     app.get("/api/attendance", async (req, res) => {
         try {
-            const date = req.query.date || new Date().toISOString().split("T")[0];
+            const date = req.query.date || todayString();
             const records = await storage.getAttendanceByDate(date);
             res.json(records);
         }
@@ -259,33 +332,42 @@ export async function registerRoutes(app) {
             const daysLeft = Math.max(0, daysUntil(student.expiryDate));
             // Expired if: no expiry date OR days left <= 0
             const isExpired = !student.expiryDate || daysLeft <= 0;
+            const today = todayString();
+            // Saved payment timestamp from the database (written once when the
+            // fee was paid) - never the current time.
+            const latestPayment = await storage.getLatestPaymentByStudentId(student.id);
+            const paymentDate = latestPayment?.date ?? null;
+            const paymentTime = latestPayment?.createdAt ?? null;
+            const studentInfo = {
+                name: student.name,
+                registerNumber: student.registerNo,
+                expiryDate: student.expiryDate,
+                joinDate: student.joinDate
+            };
             // Step 3: Check if expired FIRST - don't insert for expired members
             if (isExpired) {
                 return res.status(200).json({
                     type: "expired",
                     message: "You have to pay the fees",
-                    student: {
-                        name: student.name,
-                        registerNumber: student.registerNo,
-                        expiryDate: student.expiryDate
-                    },
+                    date: today,
+                    paymentDate,
+                    paymentTime,
+                    student: studentInfo,
                     daysLeft,
                     isExpired: true
                 });
             }
             // Step 4: Check if already marked today (only for active members)
-            const today = new Date().toISOString().split("T")[0];
             const existingRecord = await storage.getAttendanceByDate(today);
             const alreadyMarked = existingRecord.some((r) => r.registerNo === registerNoString);
             if (alreadyMarked) {
                 return res.status(200).json({
                     type: "warning",
                     message: "Attendance already marked for today",
-                    student: {
-                        name: student.name,
-                        registerNumber: student.registerNo,
-                        expiryDate: student.expiryDate
-                    },
+                    date: today,
+                    paymentDate,
+                    paymentTime,
+                    student: studentInfo,
                     daysLeft,
                     isExpired: false
                 });
@@ -302,12 +384,11 @@ export async function registerRoutes(app) {
             res.status(200).json({
                 type: "success",
                 message: "Attendance marked successfully",
+                date: today,
                 timeIn,
-                student: {
-                    name: student.name,
-                    registerNumber: student.registerNo,
-                    expiryDate: student.expiryDate
-                },
+                paymentDate,
+                paymentTime,
+                student: studentInfo,
                 daysLeft,
                 isExpired: false
             });

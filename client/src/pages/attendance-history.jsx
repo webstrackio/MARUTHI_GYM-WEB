@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Download, Search, Calendar } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { formatDate, todayString } from "@shared/dates";
 // Helper function to format time from ISO UTC to local time
 function formatTime(time) {
     if (!time)
@@ -27,7 +27,7 @@ function formatTime(time) {
     return time;
 }
 export default function AttendanceHistory() {
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+    const [selectedDate, setSelectedDate] = useState(todayString());
     const [searchRegister, setSearchRegister] = useState("");
     const { toast } = useToast();
     const { data: attendanceRecords, isLoading } = useQuery({
@@ -85,12 +85,7 @@ export default function AttendanceHistory() {
           <CardTitle>Attendance Records</CardTitle>
           <CardDescription>
             Showing {filteredRecords?.length ?? 0} record(s) for{" "}
-            {new Date(selectedDate).toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-        })}
+            {formatDate(selectedDate)}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -124,12 +119,12 @@ export default function AttendanceHistory() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRecords.map((record, index) => (<motion.tr key={record.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index * 0.04, 0.24) }} data-testid={`row-attendance-${record.id}`}>
-                      <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
+                  {filteredRecords.map((record) => (<tr key={record.id} data-testid={`row-attendance-${record.id}`}>
+                      <TableCell>{formatDate(record.date)}</TableCell>
                       <TableCell className="font-medium">{record.registerNo}</TableCell>
                       <TableCell>{record.studentName}</TableCell>
                       <TableCell>{formatTime(record.timeIn)}</TableCell>
-                    </motion.tr>))}
+                    </tr>))}
                 </TableBody>
               </Table>
             </div>) : (<div className="text-center py-12 text-muted-foreground">

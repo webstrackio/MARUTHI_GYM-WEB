@@ -1,5 +1,5 @@
 import { storage } from "../../server/lib/storage.js";
-import { insertStudentSchema, normalizeBatch } from "../../shared/schema.js";
+import { insertStudentSchema, normalizeBatch, normalizePhone } from "../../shared/schema.js";
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
@@ -12,6 +12,18 @@ export default async function handler(req, res) {
     }
   } else if (req.method === "POST") {
     try {
+      const normalizedPhone = normalizePhone(req.body.phone);
+      if (!/^[0-9]{10}$/.test(normalizedPhone)) {
+        return res.status(400).json({ error: "Phone number must be exactly 10 digits" });
+      }
+      const existingPhone = await storage.getStudentByPhone(normalizedPhone);
+      if (existingPhone) {
+        return res.status(409).json({
+          error: "This phone number is already registered",
+          conflict: true,
+          student: existingPhone,
+        });
+      }
       let registerNo = await storage.getNextRegisterNo();
       let existing = await storage.getStudentByRegisterNo(registerNo);
       while (existing) {
@@ -23,10 +35,24 @@ export default async function handler(req, res) {
       }
       const validatedData = insertStudentSchema.parse({
         ...req.body,
+        phone: normalizedPhone,
         registerNo,
         batch: normalizeBatch(req.body.batch),
       });
-      const student = await storage.createStudent(validatedData);
+      let student;
+      try {
+        student = await storage.createStudent(validatedData);
+      } catch (error) {
+        if (error && (error.code === "23505" || /unique/i.test(`${error.detail || ""}${error.message || ""}`))) {
+          const duplicate = await storage.getStudentByPhone(normalizedPhone);
+          return res.status(409).json({
+            error: "This phone number is already registered",
+            conflict: true,
+            student: duplicate,
+          });
+        }
+        throw error;
+      }
       res.status(201).json(student);
     } catch (error) {
       if (error.name === "ZodError") {

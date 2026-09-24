@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, Fragment, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -7,15 +7,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Users, LogIn, AlertCircle, CheckCircle, Search, Sun, Moon } from "lucide-react";
+import { Plus, Pencil, Users, LogIn, AlertCircle, AlertTriangle, CheckCircle, Search, Sun, Moon, Phone, Share2 } from "lucide-react";
+import { toBlob } from "html-to-image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertStudentSchema, normalizeBatch } from "@shared/schema";
-import { daysUntil, parseDateString } from "@shared/dates";
+import { insertStudentSchema, normalizeBatch, normalizePhone } from "@shared/schema";
+import { daysUntil, formatDate, formatTimeIST, parseDateString, todayString } from "@shared/dates";
 import { useToday } from "@/hooks/use-today";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -27,6 +29,25 @@ const formSchema = insertStudentSchema.omit({ expiryDate: true, registerNo: true
     address: z.string().min(1, "Address is required"),
     batch: z.enum(["morning", "evening"]),
 });
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function openWhatsAppWeb() {
+    const anchor = document.createElement("a");
+    anchor.href = "https://web.whatsapp.com/";
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+}
 function MemberCard({ title, description, students, columns, getStatus, getDaysLeft, canCheckIn, onCheckIn, onEdit, isCheckInPending, emptyText, }) {
     const renderCell = (column, student) => {
         const status = getStatus(student.expiryDate);
@@ -40,10 +61,10 @@ function MemberCard({ title, description, students, columns, getStatus, getDaysL
             case "Address":
                 return <TableCell>{student.address}</TableCell>;
             case "Join Date":
-                return <TableCell>{new Date(student.joinDate).toLocaleDateString()}</TableCell>;
+                return <TableCell>{formatDate(student.joinDate)}</TableCell>;
             case "Expiry Date":
                 return (<TableCell>
-            {student.expiryDate ? new Date(student.expiryDate).toLocaleDateString() : "-"}
+            {student.expiryDate ? formatDate(student.expiryDate) : "-"}
           </TableCell>);
             case "Batch":
                 return (<TableCell>
@@ -122,6 +143,93 @@ export default function Students() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState(null);
     const [attendanceFeedback, setAttendanceFeedback] = useState(null);
+    const welcomeCardRef = useRef(null);
+    const validateImageBlob = (blob) => new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+            const ok = img.naturalWidth > 0 && img.naturalHeight > 0;
+            URL.revokeObjectURL(url);
+            resolve(ok);
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(false);
+        };
+        img.src = url;
+    });
+    const generateCardImage = async () => {
+        if (!welcomeCardRef.current)
+            return null;
+        if (document.fonts?.ready) {
+            await Promise.race([document.fonts.ready, new Promise((resolve) => setTimeout(resolve, 1500))]);
+        }
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const blob = await toBlob(welcomeCardRef.current, {
+            pixelRatio: 2,
+            cacheBust: true,
+            skipFonts: true,
+            backgroundColor: "#111827",
+        });
+        if (!blob || blob.size < 512)
+            return null;
+        const valid = await validateImageBlob(blob);
+        return valid ? blob : null;
+    };
+    const handleShareFeedback = async () => {
+        if (!attendanceFeedback?.data)
+            return;
+        let blob = null;
+        try {
+            blob = await generateCardImage();
+        }
+        catch (_err) {
+            blob = null;
+        }
+        if (!blob) {
+            toast({ title: "Unable to generate Maruthi Gym card. Please try again.", variant: "destructive" });
+            return;
+        }
+        const file = new File([blob], "maruthi-gym-card.png", { type: "image/png" });
+        if (typeof navigator.share === "function" && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], title: "Maruthi Gym" });
+                return;
+            }
+            catch (err) {
+                if (err?.name === "AbortError")
+                    return;
+            }
+        }
+        let copied = false;
+        if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+            try {
+                await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+                copied = true;
+            }
+            catch (_err) {
+                copied = false;
+            }
+        }
+        openWhatsAppWeb();
+        if (copied) {
+            toast({ title: "Card image copied", description: "Paste the card image into the open WhatsApp Web chat" });
+        }
+        else {
+            downloadBlob(blob, "maruthi-gym-card.png");
+            toast({ title: "Card image downloaded", description: "Attach the downloaded card image into the open WhatsApp Web chat" });
+        }
+    };
+    const [duplicateStudent, setDuplicateStudent] = useState(null);
+    const parseApiError = (error) => {
+        try {
+            const text = error.message?.slice(error.message.indexOf(": ") + 2);
+            return text ? JSON.parse(text) : null;
+        }
+        catch {
+            return null;
+        }
+    };
     const { toast } = useToast();
     const { data: studentsData, isLoading } = useQuery({
         queryKey: ["/api/students"],
@@ -146,7 +254,7 @@ export default function Students() {
             name: "",
             phone: "",
             address: "",
-            joinDate: new Date().toISOString().split("T")[0],
+            joinDate: todayString(),
             batch: "morning",
         },
     });
@@ -161,13 +269,18 @@ export default function Students() {
             form.reset();
             navigate(`/payments?studentId=${createdStudent.id}`);
         },
-        onError: () => {
-            toast({ title: "Failed to add student", variant: "destructive" });
+        onError: (error) => {
+            const body = parseApiError(error);
+            if (body?.conflict && body.student) {
+                setDuplicateStudent(body.student);
+                return;
+            }
+            toast({ title: body?.error || "Failed to add student", variant: "destructive" });
         },
     });
     const updateMutation = useMutation({
         mutationFn: ({ id, ...data }) => apiRequest("PATCH", `/api/students/${id}`, data),
-        onSuccess: async () => {
+        onSuccess: async (_response, variables) => {
             await queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             await queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             await queryClient.refetchQueries({ queryKey: ["/api/students"] });
@@ -175,9 +288,16 @@ export default function Students() {
             setIsDialogOpen(false);
             setEditingStudent(null);
             form.reset();
+            navigate(`/payments?studentId=${variables.id}`);
         },
-        onError: () => {
-            toast({ title: "Failed to update student", variant: "destructive" });
+        onError: (error) => {
+            const body = parseApiError(error);
+            if (body?.conflict && body.student) {
+                setDuplicateStudent(body.student);
+            }
+            else {
+                toast({ title: body?.error || "Failed to update student", variant: "destructive" });
+            }
         },
     });
     const attendanceMutation = useMutation({
@@ -193,8 +313,9 @@ export default function Students() {
                 message: data.message,
                 data: {
                     name: data.student?.name ?? null,
-                    date: new Date().toISOString().split("T")[0],
-                    timeIn: data.timeIn ?? null,
+                    date: data.paymentDate ?? data.student?.joinDate ?? todayString(),
+                    expiryDate: data.student?.expiryDate ?? null,
+                    paymentTime: data.paymentTime ?? null,
                     daysLeft: typeof data.daysLeft === "number" ? data.daysLeft : null,
                     status: typeof data.isExpired === "boolean" ? (data.isExpired ? "EXPIRED" : "ACTIVE") : null,
                 },
@@ -209,8 +330,9 @@ export default function Students() {
                     message: errorData.message,
                     data: {
                         name: errorData.student?.name ?? null,
-                        date: errorData.student?.expiryDate ?? null,
-                        timeIn: errorData.timeIn ?? null,
+                        date: errorData.paymentDate ?? errorData.student?.joinDate ?? todayString(),
+                        expiryDate: errorData.student?.expiryDate ?? null,
+                        paymentTime: errorData.paymentTime ?? null,
                         daysLeft: typeof errorData.daysLeft === "number" ? errorData.daysLeft : null,
                         status: typeof errorData.isExpired === "boolean" ? (errorData.isExpired ? "EXPIRED" : "ACTIVE") : null,
                     },
@@ -222,8 +344,9 @@ export default function Students() {
                     message: "Student not found",
                     data: {
                         name: null,
-                        date: null,
-                        timeIn: null,
+                        date: todayString(),
+                        expiryDate: null,
+                        paymentTime: null,
                         daysLeft: null,
                         status: null,
                     },
@@ -250,7 +373,7 @@ export default function Students() {
                 name: "",
                 phone: "",
                 address: "",
-                joinDate: new Date().toISOString().split("T")[0],
+                joinDate: todayString(),
                 batch: selectedBatch === "all" ? "morning" : selectedBatch,
             });
             try {
@@ -265,12 +388,24 @@ export default function Students() {
         setIsDialogOpen(true);
     };
     const onSubmit = (data) => {
+        if (createMutation.isPending || updateMutation.isPending)
+            return;
+        const payload = { ...data, phone: normalizePhone(data.phone) };
         if (editingStudent) {
-            updateMutation.mutate({ ...data, id: editingStudent.id });
+            updateMutation.mutate({ ...payload, id: editingStudent.id });
         }
         else {
-            createMutation.mutate(data);
+            createMutation.mutate(payload);
         }
+    };
+    const handleViewDuplicateStudent = () => {
+        const id = duplicateStudent?.id;
+        setDuplicateStudent(null);
+        if (!id)
+            return;
+        setIsDialogOpen(false);
+        form.reset();
+        navigate(`/payments?studentId=${id}`);
     };
     const getStatus = (expiryDate) => {
         if (!expiryDate)
@@ -460,7 +595,7 @@ export default function Students() {
               <FormField control={form.control} name="joinDate" render={({ field }) => (<FormItem>
                     <FormLabel>Join Date <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-join-date"/>
+                      <DateInput value={field.value} onChange={(v) => field.onChange(v)} label="Join Date" data-testid="input-join-date" data-testid-calendar="calendar-join-date"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>)}/>
@@ -482,14 +617,72 @@ export default function Students() {
         </DialogContent>
       </Dialog>
 
+      {/* Duplicate Phone Number Dialog */}
+      <Dialog open={duplicateStudent !== null} onOpenChange={(open) => !open && setDuplicateStudent(null)}>
+        <DialogContent className="max-w-md w-[calc(100%-2rem)] sm:w-full" data-testid="dialog-duplicate-student">
+          {duplicateStudent && (<div className="space-y-6">
+              <div className="text-center">
+                <AlertTriangle className="h-16 w-16 text-amber-500 mx-auto"/>
+                <h2 className="text-2xl font-bold text-amber-600 dark:text-amber-400">Student Already Exists</h2>
+                <p className="text-sm text-muted-foreground mt-1">This phone number is already registered.</p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-gray-100 dark:bg-gray-900/30 space-y-3">
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Name:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100 text-right">{duplicateStudent.name}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Register No.:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{duplicateStudent.registerNo}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400"><Phone className="h-3.5 w-3.5 inline mr-1"/></span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{duplicateStudent.phone}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Batch:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{normalizeBatch(duplicateStudent.batch) === "morning" ? "Morning" : "Evening"}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Address:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100 text-right">{duplicateStudent.address}</span>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                  <Badge variant={getStatus(duplicateStudent.expiryDate) === "Active" ? "default" : "destructive"} className={getStatus(duplicateStudent.expiryDate) === "Active"
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                        : getStatus(duplicateStudent.expiryDate) === "Expiring Today"
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                            : getStatus(duplicateStudent.expiryDate) === "Pay Required"
+                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                                : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"} data-testid="badge-duplicate-status">
+                    {getStatus(duplicateStudent.expiryDate)}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button onClick={handleViewDuplicateStudent} className="flex-1" data-testid="button-view-student">
+                  View Student
+                </Button>
+                <Button variant="outline" onClick={() => setDuplicateStudent(null)} className="flex-1" data-testid="button-cancel-duplicate">
+                  Cancel
+                </Button>
+              </div>
+            </div>)}
+        </DialogContent>
+      </Dialog>
+
       {/* Attendance Feedback Dialog */}
       <Dialog open={attendanceFeedback !== null} onOpenChange={(open) => !open && setAttendanceFeedback(null)}>
         <DialogContent className="max-w-md w-[calc(100%-2rem)] sm:w-full" data-testid={`feedback-${attendanceFeedback?.type}`}>
-          {attendanceFeedback && (<div className="space-y-6">
+          {attendanceFeedback && (<>
+          <div ref={welcomeCardRef} className="space-y-6">
               <div className="text-center">
                 {attendanceFeedback.type === "success" ? (<div className="space-y-3">
                     <CheckCircle className="h-16 w-16 text-green-500 mx-auto"/>
-                    <h2 className="text-2xl font-bold text-green-600 dark:text-green-400">Welcome</h2>
+                    <h2 className="text-2xl font-bold text-green-600 dark:text-green-400">Maruthi Gym</h2>
                   </div>) : (<div className="space-y-3">
                     <AlertCircle className="h-16 w-16 text-red-500 mx-auto"/>
                     <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">
@@ -507,11 +700,15 @@ export default function Students() {
                   </div>
                   {attendanceFeedback.data.date && (<div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Date:</span>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{attendanceFeedback.data.date}</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(attendanceFeedback.data.date)}</span>
                     </div>)}
-                  {attendanceFeedback.data.timeIn && (<div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Time In:</span>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{attendanceFeedback.data.timeIn}</span>
+                  {attendanceFeedback.data.expiryDate && (<div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Expiry:</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(attendanceFeedback.data.expiryDate)}</span>
+                    </div>)}
+                  {attendanceFeedback.data.paymentTime && (<div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Time:</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatTimeIST(attendanceFeedback.data.paymentTime)}</span>
                     </div>)}
                   {attendanceFeedback.data.daysLeft !== null && attendanceFeedback.data.daysLeft !== undefined && (<div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Days Left:</span>
@@ -536,7 +733,12 @@ export default function Students() {
                 : "bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"}`} data-testid="button-close-feedback">
                 Close
               </Button>
-            </div>)}
+            </div>
+            {attendanceFeedback.type === "success" && (
+            <button type="button" onClick={handleShareFeedback} className="absolute right-12 top-4 rounded-sm p-1 text-muted-foreground opacity-70 ring-offset-background transition-all duration-150 hover:scale-110 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none" aria-label="Share via WhatsApp" title="Share via WhatsApp" data-testid="button-share-feedback">
+              <Share2 className="h-4 w-4"/>
+            </button>)}
+          </>)}
         </DialogContent>
       </Dialog>
     </div>);
