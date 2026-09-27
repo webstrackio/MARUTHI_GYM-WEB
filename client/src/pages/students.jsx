@@ -1,4 +1,4 @@
-import { useState, Fragment, useRef } from "react";
+import { useState, Fragment, useEffect, useRef, useLayoutEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -11,13 +11,14 @@ import { DateInput } from "@/components/ui/date-input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Users, LogIn, AlertCircle, AlertTriangle, CheckCircle, Search, Sun, Moon, Phone, Share2 } from "lucide-react";
+import { Plus, Pencil, Users, LogIn, AlertCircle, AlertTriangle, CheckCircle, Search, Sun, Moon, Phone, Share2, Dumbbell } from "lucide-react";
 import { toBlob } from "html-to-image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertStudentSchema, normalizeBatch, normalizePhone } from "@shared/schema";
 import { daysUntil, formatDate, formatTimeIST, parseDateString, todayString } from "@shared/dates";
+import { buildWhatsAppShareLink, openExternalUrl } from "@/lib/whatsapp";
 import { useToday } from "@/hooks/use-today";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -40,13 +41,84 @@ function downloadBlob(blob, filename) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function openWhatsAppWeb() {
-    const anchor = document.createElement("a");
-    anchor.href = "https://web.whatsapp.com/";
-    anchor.target = "_blank";
-    anchor.rel = "noopener noreferrer";
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
+    openExternalUrl("https://web.whatsapp.com/");
+}
+// Plain-text version of the check-in card shown in the popup. The values are
+// read straight from the already-stored feedback data, so a repeated check-in
+// replays the exact same details the popup shows and never invents a new
+// check-in date or time.
+function buildCheckInMessage(data) {
+    return [
+        "Maruthi Gym",
+        ...buildCheckInRows(data).map((row) => `${row.label}: ${row.value}`),
+    ].join("\n");
+}
+// The six card fields, built once so the popup, the shareable card image and
+// the share text can never drift apart. Each row is null when the popup would
+// not render it (missing date, missing time, ...).
+function buildCheckInRows(data) {
+    return [
+        data.name ? { label: "Name", value: data.name, tone: "default" } : null,
+        data.date ? { label: "Date", value: formatDate(data.date), tone: "default" } : null,
+        data.expiryDate ? { label: "Expiry", value: formatDate(data.expiryDate), tone: "default" } : null,
+        data.paymentTime ? { label: "Time", value: formatTimeIST(data.paymentTime), tone: "default" } : null,
+        (data.daysLeft !== null && data.daysLeft !== undefined)
+            ? {
+                label: "Days Left",
+                value: `${Math.max(0, data.daysLeft)} days`,
+                tone: Math.max(0, data.daysLeft) > 0 ? "positive" : "negative",
+            }
+            : null,
+        data.status
+            ? {
+                label: "Status",
+                value: data.status,
+                tone: data.status === "ACTIVE" ? "positive" : "negative",
+            }
+            : null,
+    ].filter(Boolean);
+}
+function buildAttendanceFeedbackData(payload) {
+    return {
+        name: payload.student?.name ?? null,
+        date: payload.paymentDate ?? payload.student?.joinDate ?? todayString(),
+        expiryDate: payload.student?.expiryDate ?? null,
+        paymentTime: payload.paymentTime ?? null,
+        daysLeft: typeof payload.daysLeft === "number" ? payload.daysLeft : null,
+        status: typeof payload.isExpired === "boolean" ? (payload.isExpired ? "EXPIRED" : "ACTIVE") : null,
+    };
+}
+// --- Shareable card metrics -------------------------------------------------
+// The shared card is a fixed-format image, so `vw`/`%` units would resolve
+// against the viewport rather than the card. Instead the card is *measured*:
+// every value is `white-space: nowrap` with `flex-shrink: 0`, so the browser
+// reports the natural width the rows actually need and the card is sized from
+// that number. A long student name therefore widens the card instead of
+// wrapping "12 days" or colliding with "ACTIVE", and nothing is ever clipped.
+const CARD_PADDING_X = 24;
+const CARD_MIN_WIDTH = 320;
+const CARD_MIN_CONTENT_WIDTH = CARD_MIN_WIDTH - CARD_PADDING_X * 2;
+const CARD_MAX_SCALE = 1.35;
+// `intrinsicContentWidth` is measured at the base metrics (15px type, 24px
+// padding) on the first layout pass. Text and padding both grow linearly with
+// `scale`, so the measurement is scaled rather than re-measured, with a small
+// margin so sub-pixel rounding can never clip a glyph. The scale never drops
+// below 1 - type is not shrunk to force a fit, the card grows instead.
+function computeCardMetrics(intrinsicContentWidth) {
+    const base = Math.max(Math.ceil(intrinsicContentWidth), CARD_MIN_CONTENT_WIDTH);
+    const scale = Math.min(CARD_MAX_SCALE, Math.max(1, base / CARD_MIN_CONTENT_WIDTH));
+    return {
+        width: Math.max(CARD_MIN_WIDTH, Math.ceil(base * scale * 1.02) + 2),
+        scale,
+    };
+}
+// Bounded type scale: the preferred size follows the card and clamp() keeps it
+// inside a readable band instead of letting it drift.
+function cardFontSize(base, scale) {
+    return `clamp(${Math.round(base * 0.9)}px, ${(base * scale).toFixed(1)}px, ${Math.round(base * 1.35)}px)`;
+}
+function cardSpacing(base, scale) {
+    return `${(base * scale).toFixed(1)}px`;
 }
 function MemberCard({ title, description, students, columns, getStatus, getDaysLeft, canCheckIn, onCheckIn, onEdit, isCheckInPending, emptyText, }) {
     const renderCell = (column, student) => {
@@ -144,6 +216,17 @@ export default function Students() {
     const [editingStudent, setEditingStudent] = useState(null);
     const [attendanceFeedback, setAttendanceFeedback] = useState(null);
     const welcomeCardRef = useRef(null);
+    const checkInCardRef = useRef(null);
+    const checkInContentRef = useRef(null);
+    const [checkInCardMetrics, setCheckInCardMetrics] = useState(null);
+    // Size the shareable card from its own content. Runs before paint so the
+    // html-to-image capture never sees a card that is still being laid out.
+    useLayoutEffect(() => {
+        if (attendanceFeedback?.type !== "warning" || !checkInContentRef.current) {
+            return;
+        }
+        setCheckInCardMetrics(computeCardMetrics(checkInContentRef.current.scrollWidth));
+    }, [attendanceFeedback]);
     const validateImageBlob = (blob) => new Promise((resolve) => {
         const url = URL.createObjectURL(blob);
         const img = new Image();
@@ -158,23 +241,31 @@ export default function Students() {
         };
         img.src = url;
     });
-    const generateCardImage = async () => {
-        if (!welcomeCardRef.current)
+    // Rasterizes a DOM node to a validated PNG, so a blank/unsupported render
+    // is rejected instead of being shared as an empty image.
+    const renderNodeToImage = async (node, backgroundColor) => {
+        if (!node)
             return null;
         if (document.fonts?.ready) {
             await Promise.race([document.fonts.ready, new Promise((resolve) => setTimeout(resolve, 1500))]);
         }
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const blob = await toBlob(welcomeCardRef.current, {
+        const blob = await toBlob(node, {
             pixelRatio: 2,
             cacheBust: true,
             skipFonts: true,
-            backgroundColor: "#111827",
+            backgroundColor,
         });
         if (!blob || blob.size < 512)
             return null;
         const valid = await validateImageBlob(blob);
         return valid ? blob : null;
+    };
+    const generateCardImage = async () => {
+        return renderNodeToImage(welcomeCardRef.current, "#111827");
+    };
+    const generateCheckInCardImage = async () => {
+        return renderNodeToImage(checkInCardRef.current, "#ffffff");
     };
     const handleShareFeedback = async () => {
         if (!attendanceFeedback?.data)
@@ -220,6 +311,63 @@ export default function Students() {
             toast({ title: "Card image downloaded", description: "Attach the downloaded card image into the open WhatsApp Web chat" });
         }
     };
+    // WhatsApp sharing for the "Already Checked In" popup. The member's number
+    // is never attached, so WhatsApp always shows its own contact/group picker.
+    // The card image is generated from the same data the popup renders, and
+    // carries every field, because browsers ignore the `text` member whenever
+    // `files` is passed to the Web Share API - the image is what guarantees the
+    // information survives the share.
+    const handleShareAlreadyCheckedIn = async () => {
+        const data = attendanceFeedback?.data;
+        if (!data) {
+            return;
+        }
+        const message = buildCheckInMessage(data);
+        let blob = null;
+        try {
+            blob = await generateCheckInCardImage();
+        }
+        catch (_err) {
+            blob = null;
+        }
+        if (!blob) {
+            openExternalUrl(buildWhatsAppShareLink(message));
+            toast({ title: "Unable to generate the check-in card", description: "Opened WhatsApp with the check-in details as text." });
+            return;
+        }
+        const file = new File([blob], "maruthi-gym-check-in.png", { type: "image/png" });
+        if (typeof navigator.share === "function" && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], text: message });
+                return;
+            }
+            catch (err) {
+                if (err?.name === "AbortError")
+                    return;
+            }
+        }
+        // No file sharing available (desktop browsers mostly): hand the card
+        // over on the clipboard and open WhatsApp's recipient picker with the
+        // text, so the details can still be pasted into any chat or group.
+        let copied = false;
+        if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+            try {
+                await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+                copied = true;
+            }
+            catch (_err) {
+                copied = false;
+            }
+        }
+        openExternalUrl(buildWhatsAppShareLink(message));
+        if (copied) {
+            toast({ title: "Card image copied", description: "Pick a chat in WhatsApp and paste the card image" });
+        }
+        else {
+            downloadBlob(blob, "maruthi-gym-check-in.png");
+            toast({ title: "Card image downloaded", description: "Pick a chat in WhatsApp and attach the downloaded card" });
+        }
+    };
     const [duplicateStudent, setDuplicateStudent] = useState(null);
     const parseApiError = (error) => {
         try {
@@ -237,7 +385,9 @@ export default function Students() {
     const students = studentsData ? [...studentsData].reverse() : undefined;
     const [, navigate] = useLocation();
     const search = useSearch();
-    const statusFilter = new URLSearchParams(search).get("status");
+    const searchParams = new URLSearchParams(search);
+    const statusFilter = searchParams.get("status");
+    const memberIdFilter = searchParams.get("memberId");
     const [activeTab, setActiveTab] = useState(() => {
         if (statusFilter === "active")
             return "active";
@@ -247,6 +397,25 @@ export default function Students() {
     });
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedBatch, setSelectedBatch] = useState("all");
+    // `?memberId=` deep-links straight from the Dashboard's expired-member
+    // cards. Filtering by register number keeps that member as the only row on
+    // screen, in whichever tab the link asked for.
+    const memberIdRef = useRef(null);
+    useEffect(() => {
+        if (!memberIdFilter) {
+            memberIdRef.current = null;
+            return;
+        }
+        if (!students)
+            return;
+        if (memberIdRef.current === memberIdFilter)
+            return;
+        const member = students.find((s) => String(s.id) === memberIdFilter);
+        if (!member)
+            return;
+        memberIdRef.current = memberIdFilter;
+        setSearchQuery(member.registerNo);
+    }, [memberIdFilter, students]);
     const form = useForm({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -311,14 +480,7 @@ export default function Students() {
             setAttendanceFeedback({
                 type: data.type,
                 message: data.message,
-                data: {
-                    name: data.student?.name ?? null,
-                    date: data.paymentDate ?? data.student?.joinDate ?? todayString(),
-                    expiryDate: data.student?.expiryDate ?? null,
-                    paymentTime: data.paymentTime ?? null,
-                    daysLeft: typeof data.daysLeft === "number" ? data.daysLeft : null,
-                    status: typeof data.isExpired === "boolean" ? (data.isExpired ? "EXPIRED" : "ACTIVE") : null,
-                },
+                data: buildAttendanceFeedbackData(data),
             });
         },
         onError: (error) => {
@@ -328,14 +490,7 @@ export default function Students() {
                 setAttendanceFeedback({
                     type: errorData.type || "not_found",
                     message: errorData.message,
-                    data: {
-                        name: errorData.student?.name ?? null,
-                        date: errorData.paymentDate ?? errorData.student?.joinDate ?? todayString(),
-                        expiryDate: errorData.student?.expiryDate ?? null,
-                        paymentTime: errorData.paymentTime ?? null,
-                        daysLeft: typeof errorData.daysLeft === "number" ? errorData.daysLeft : null,
-                        status: typeof errorData.isExpired === "boolean" ? (errorData.isExpired ? "EXPIRED" : "ACTIVE") : null,
-                    },
+                    data: buildAttendanceFeedbackData(errorData),
                 });
             }
             catch {
@@ -453,6 +608,7 @@ export default function Students() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {statusFilter && (<Button variant="outline" onClick={() => {
                 setActiveTab("all");
+                setSearchQuery("");
                 navigate("/students");
             }} data-testid="button-show-all-students">
               Show All
@@ -674,6 +830,64 @@ export default function Students() {
         </DialogContent>
       </Dialog>
 
+      {/* Shareable "Already Checked In" card. Rendered off-screen so
+          html-to-image can rasterize it. Its width comes from the measured
+          content, the height is content-based, and every colour is an explicit
+          value so the exported PNG is identical in light and dark mode. */}
+      {attendanceFeedback?.type === "warning" && (() => {
+        const scale = checkInCardMetrics?.scale ?? 1;
+        const rows = buildCheckInRows(attendanceFeedback.data);
+        return (
+          <div className="pointer-events-none fixed left-[-9999px] top-0" aria-hidden="true">
+            <div
+              ref={checkInCardRef}
+              className="shadow-2xl"
+              style={{
+                  backgroundColor: "#ffffff",
+                  boxSizing: "border-box",
+                  borderRadius: cardSpacing(16, scale),
+                  // max-content on the first pass exposes the natural width to
+                  // measure; afterwards it is locked to that width so no value
+                  // can ever wrap. Height is left content-based.
+                  width: checkInCardMetrics ? checkInCardMetrics.width : "max-content",
+                  minWidth: CARD_MIN_WIDTH,
+              }}
+              data-testid="check-in-card-preview"
+            >
+              <div ref={checkInContentRef} style={{ width: checkInCardMetrics ? "100%" : "max-content" }}>
+                <div style={{ display: "flex", alignItems: "center", columnGap: cardSpacing(10, scale), backgroundColor: "#065f46", padding: `${cardSpacing(17, scale)} ${cardSpacing(CARD_PADDING_X, scale)}`, borderTopLeftRadius: cardSpacing(16, scale), borderTopRightRadius: cardSpacing(16, scale) }}>
+                  <Dumbbell style={{ color: "#ffffff", width: cardSpacing(20, scale), height: cardSpacing(20, scale), flexShrink: 0 }}/>
+                  <span style={{ color: "#ffffff", fontSize: cardFontSize(19, scale), fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>Maruthi Gym</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", columnGap: cardSpacing(8, scale), backgroundColor: "#fee2e2", padding: `${cardSpacing(10, scale)} ${cardSpacing(CARD_PADDING_X, scale)}` }}>
+                  <AlertTriangle style={{ color: "#b91c1c", width: cardSpacing(16, scale), height: cardSpacing(16, scale), flexShrink: 0 }}/>
+                  <span style={{ color: "#b91c1c", fontSize: cardFontSize(14, scale), fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>Already Checked In</span>
+                </div>
+                <div style={{ padding: `${cardSpacing(20, scale)} ${cardSpacing(CARD_PADDING_X, scale)}`, borderBottomLeftRadius: cardSpacing(16, scale), borderBottomRightRadius: cardSpacing(16, scale) }}>
+                  {rows.map((row, index) => (
+                    <div
+                      key={row.label}
+                      style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          columnGap: cardSpacing(20, scale),
+                          paddingBottom: index === rows.length - 1 ? 0 : cardSpacing(12, scale),
+                          marginBottom: index === rows.length - 1 ? 0 : cardSpacing(12, scale),
+                          borderBottom: index === rows.length - 1 ? "none" : `1px solid ${cardSpacing(1, scale)} #f1f5f9`,
+                      }}
+                    >
+                      <span style={{ color: "#64748b", fontSize: cardFontSize(15, scale), fontWeight: 400, whiteSpace: "nowrap", flexShrink: 0 }}>{row.label}</span>
+                      <span style={{ color: row.tone === "positive" ? "#15803d" : row.tone === "negative" ? "#b91c1c" : "#0f172a", fontSize: cardFontSize(15, scale), fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, textAlign: "right" }}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Attendance Feedback Dialog */}
       <Dialog open={attendanceFeedback !== null} onOpenChange={(open) => !open && setAttendanceFeedback(null)}>
         <DialogContent className="max-w-md w-[calc(100%-2rem)] sm:w-full" data-testid={`feedback-${attendanceFeedback?.type}`}>
@@ -734,8 +948,10 @@ export default function Students() {
                 Close
               </Button>
             </div>
-            {attendanceFeedback.type === "success" && (
-            <button type="button" onClick={handleShareFeedback} className="absolute right-12 top-4 rounded-sm p-1 text-muted-foreground opacity-70 ring-offset-background transition-all duration-150 hover:scale-110 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none" aria-label="Share via WhatsApp" title="Share via WhatsApp" data-testid="button-share-feedback">
+            {(attendanceFeedback.type === "success" || attendanceFeedback.type === "warning") && (
+            <button type="button" onClick={attendanceFeedback.type === "success" ? handleShareFeedback : handleShareAlreadyCheckedIn} className={`absolute right-12 top-4 rounded-sm p-1 transition-all duration-150 hover:scale-110 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none ${attendanceFeedback.type === "success"
+              ? "text-muted-foreground opacity-70 ring-offset-background"
+              : "text-green-600 dark:text-green-400"}`} aria-label="Share via WhatsApp" title="Share via WhatsApp" data-testid={attendanceFeedback.type === "success" ? "button-share-feedback" : "button-share-warning"}>
               <Share2 className="h-4 w-4"/>
             </button>)}
           </>)}

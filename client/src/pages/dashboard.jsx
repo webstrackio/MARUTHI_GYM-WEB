@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { animate, motion, useInView } from "framer-motion";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserCheck, UserX, CalendarCheck } from "lucide-react";
+import { WhatsAppBulkDialog, WhatsAppMessageDialog } from "@/components/whatsapp-dialogs";
+import { Users, UserCheck, UserX, CalendarCheck, MessageCircle, Pencil, Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGymSettings } from "@/hooks/use-gym-settings";
 import { daysUntil, formatDate, parseDateString } from "@shared/dates";
+import { getGymName } from "@/lib/whatsapp";
 import { useToday } from "@/hooks/use-today";
 function CountUp({ value, delay = 0 }) {
     const ref = useRef(null);
@@ -29,13 +33,17 @@ function CountUp({ value, delay = 0 }) {
 }
 export default function Dashboard() {
     const { settings } = useGymSettings();
+    const gymName = getGymName(settings);
     const todayDate = parseDateString(useToday());
+    const [, navigate] = useLocation();
     const { data: stats, isLoading } = useQuery({
         queryKey: ["/api/dashboard/stats"],
     });
     const { data: students } = useQuery({
         queryKey: ["/api/students"],
     });
+    const [whatsappMember, setWhatsappMember] = useState(null);
+    const [isWhatsAppAllOpen, setIsWhatsAppAllOpen] = useState(false);
     const daysOverdue = (expiryDate) => {
         return Math.max(0, -daysUntil(expiryDate, todayDate));
     };
@@ -110,40 +118,84 @@ export default function Dashboard() {
 
       <div>
         <Card className="bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-200">
-              <UserX className="h-5 w-5"/>
-              Expired Memberships
-            </CardTitle>
-            <CardDescription className="text-red-600/70 dark:text-red-300/70">
-              {expiredMembers.length > 0
+          <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-200">
+                <UserX className="h-5 w-5"/>
+                Expired Memberships
+                {expiredMembers.length > 0 && <span className="text-base font-normal text-red-600/80 dark:text-red-300/80" data-testid="text-expired-membership-count">
+                  &mdash; {expiredMembers.length} member{expiredMembers.length === 1 ? "" : "s"}
+                </span>}
+              </CardTitle>
+              <CardDescription className="text-red-600/70 dark:text-red-300/70">
+                {expiredMembers.length > 0
             ? `${expiredMembers.length} member${expiredMembers.length === 1 ? "" : "s"} with expired membership`
             : "No expired memberships"}
-            </CardDescription>
+              </CardDescription>
+            </div>
+            {expiredMembers.length > 0 && (<Button
+              onClick={() => setIsWhatsAppAllOpen(true)}
+              className="bg-green-600 hover:bg-green-700 text-white shrink-0"
+              data-testid="button-whatsapp-all"
+            >
+              <MessageCircle className="h-4 w-4"/>
+              Message All
+            </Button>)}
           </CardHeader>
           <CardContent>
             {expiredMembers.length === 0 ? (<p className="text-sm text-muted-foreground py-2" data-testid="no-expired-memberships">
                 All memberships are up to date.
               </p>) : (<div className="space-y-3">
-                {expiredMembers.map((member) => (<div key={member.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-md" data-testid={`expired-member-${member.id}`}>
-                    <div>
-                      <p className="font-semibold text-foreground">{member.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Reg: {member.registerNo} · Expired: {member.expiryDate ? formatDate(member.expiryDate) : "Never paid"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-red-600 dark:text-red-400">EXPIRED</p>
-                      <p className="text-xs text-red-600/70 dark:text-red-400/70">
-                        {member.expiryDate
+                {expiredMembers.map((member) => (<div key={member.id} className="p-4 bg-white dark:bg-slate-900 rounded-md space-y-3" data-testid={`expired-member-${member.id}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{member.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Reg: {member.registerNo} · Expired: {member.expiryDate ? formatDate(member.expiryDate) : "Never paid"}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <Badge variant="destructive" className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" data-testid={`badge-expired-${member.id}`}>
+                          {member.expiryDate ? "🔴 EXPIRED" : "🟡 NEVER PAID"}
+                        </Badge>
+                        <p className="text-xs text-red-600/70 dark:text-red-400/70 mt-1">
+                          {member.expiryDate
                     ? `${daysOverdue(member.expiryDate)} days overdue`
-                    : "No payment recorded"}
-                      </p>
+                    : "No payment"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button size="sm" onClick={() => setWhatsappMember(member)} className="bg-green-600 hover:bg-green-700 text-white" data-testid={`button-whatsapp-member-${member.id}`}>
+                        <MessageCircle className="h-4 w-4"/>
+                        WhatsApp
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/students?status=expired&memberId=${member.id}`)} data-testid={`button-edit-member-${member.id}`}>
+                        <Pencil className="h-4 w-4"/>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/payments?studentId=${member.id}`)} data-testid={`button-renew-member-${member.id}`}>
+                        <Wallet className="h-4 w-4"/>
+                        Renew
+                      </Button>
                     </div>
                   </div>))}
               </div>)}
           </CardContent>
         </Card>
       </div>
+
+      <WhatsAppMessageDialog
+        open={whatsappMember !== null}
+        onOpenChange={(open) => !open && setWhatsappMember(null)}
+        member={whatsappMember}
+        gymName={gymName}
+      />
+      <WhatsAppBulkDialog
+        open={isWhatsAppAllOpen}
+        onOpenChange={setIsWhatsAppAllOpen}
+        members={expiredMembers}
+        gymName={gymName}
+      />
     </div>);
 }
