@@ -1,8 +1,66 @@
 import { createServer } from "http";
+import { randomUUID } from "node:crypto";
 import { storage } from "./storage.js";
 import { insertStudentSchema, insertPaymentSchema, normalizeBatch, normalizePhone } from "../shared/schema.js";
 import { calcExpiryDate, daysUntil, isDateString, todayString } from "../shared/dates.js";
+import { deliverPaymentReceipt, getWhatsAppConfig, getGymNameFromEnv } from "./lib/whatsapp.js";
+import { buildReceiptSvg } from "../shared/receipt-card.js";
+import { buildReceiptData } from "../shared/whatsapp-receipt.js";
+import { renderCardPng, getRendererInfo } from "./lib/card-renderer.js";
 export async function registerRoutes(app) {
+    // WhatsApp configuration check. Reports only booleans and the names of
+    // missing variables - never the access token or the phone number id.
+    app.get("/api/whatsapp/status", async (_req, res) => {
+        const config = getWhatsAppConfig();
+        const renderer = await getRendererInfo();
+        res.json({
+            configured: config.configured,
+            missing: config.missing,
+            dryRun: config.dryRun,
+            gymName: getGymNameFromEnv(),
+            templateName: config.templateName,
+            language: config.language,
+            // Whether the blue card can be produced here, and whether Meta would
+            // be able to fetch it. Both must be true for the image header to work.
+            receiptStyle: config.receiptStyle,
+            cardRendering: renderer.available,
+            cardFontCount: renderer.fontCount,
+            cardUrlConfigured: Boolean(config.publicBaseUrl),
+        });
+    });
+    // The receipt card image. WhatsApp fetches this itself when delivering a
+    // template with an image header. Keyed on an unguessable per-payment token
+    // rather than the sequential payment id, so it cannot be walked.
+    app.get("/api/whatsapp/card/:token.png", async (req, res) => {
+        const token = String(req.params.token || "").replace(/\.png$/i, "").trim();
+        if (!token) {
+            return res.status(400).json({ error: "Card token is required" });
+        }
+        try {
+            const payment = await storage.getPaymentByCardToken(token);
+            if (!payment) {
+                return res.status(404).json({ error: "Receipt not found" });
+            }
+            let student = null;
+            try {
+                student = payment.studentId ? await storage.getStudentById(payment.studentId) : null;
+            }
+            catch (_err) {
+                // The card only needs the payment row; the student lookup just
+                // supplies the phone number, which the card does not display.
+            }
+            const data = buildReceiptData(payment, student, { gymName: getGymNameFromEnv() });
+            const { png } = await renderCardPng(buildReceiptSvg(data), { width: 720 });
+            res.setHeader("Content-Type", "image/png");
+            res.setHeader("Content-Length", String(png.length));
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            return res.status(200).send(png);
+        }
+        catch (error) {
+            console.error("[whatsapp/card] failed:", error);
+            res.status(500).json({ error: "Could not render the receipt card" });
+        }
+    });
     // Dashboard stats
     app.get("/api/dashboard/stats", async (_req, res) => {
         try {
@@ -201,11 +259,35 @@ export async function registerRoutes(app) {
                 expiryDate,
                 tokenNumber,
             });
-            const payment = await storage.createPayment(validatedData);
+            // The card token is generated here, not taken from the request, and is
+            // added after Zod has stripped the body. The public card URL is keyed
+            // on this unguessable value rather than the sequential payment id, so
+            // nobody can walk /api/whatsapp/card/1, /2, /3 and read students'
+            // receipts.
+            const payment = await storage.createPayment({
+                ...validatedData,
+                whatsappCardToken: randomUUID(),
+            });
             await storage.updateStudent(validatedData.studentId, {
                 expiryDate,
             });
             res.status(201).json(payment);
+            // The payment is saved and the client already has its 201, so the
+            // receipt goes out after the response. A WhatsApp failure can no
+            // longer change the payment's outcome, and the owner is not kept
+            // waiting on Meta to see "Payment recorded".
+            //
+            // The nested catch matters: without it, an unexpected throw from
+            // deliverPaymentReceipt would be caught by the route's own catch
+            // below, which would then try to write a second response on top of
+            // the 201 and throw ERR_HTTP_HEADERS_SENT - turning a receipt
+            // problem into a failed payment request.
+            try {
+                await deliverPaymentReceipt(payment.id, { storage });
+            }
+            catch (receiptError) {
+                console.error(`[whatsapp] unexpected error sending receipt for payment ${payment.id}:`, receiptError);
+            }
         }
         catch (error) {
             if (error.name === "ZodError") {
@@ -266,6 +348,41 @@ export async function registerRoutes(app) {
         catch (error) {
             console.error(`DELETE /api/payments/${req.params.id} failed:`, error);
             res.status(500).json({ error: error.message || "Failed to delete payment" });
+        }
+    });
+    // Manual resend of a single receipt, mirroring api/payments/[id]/whatsapp.js.
+    // `force` bypasses the already-sent guard because the owner explicitly asked
+    // for the receipt to go out again.
+    app.post("/api/payments/:id/whatsapp", async (req, res) => {
+        try {
+            const id = parseInt(req.params.id);
+            if (!Number.isInteger(id) || id <= 0) {
+                return res.status(400).json({ error: "Valid payment id is required" });
+            }
+            const payment = await storage.getPaymentById(id);
+            if (!payment) {
+                return res.status(404).json({ error: "Payment not found" });
+            }
+            const result = await deliverPaymentReceipt(id, { storage, force: true });
+            if (result.ok) {
+                return res.json({
+                    ok: true,
+                    status: result.status,
+                    messageId: result.messageId ?? null,
+                    to: result.to ?? null,
+                });
+            }
+            return res.status(result.status === "failed" ? 502 : 409).json({
+                ok: false,
+                status: result.status,
+                error: result.error || "Could not send the receipt",
+                to: result.to ?? null,
+                configured: getWhatsAppConfig().configured,
+            });
+        }
+        catch (error) {
+            console.error(`POST /api/payments/${req.params.id}/whatsapp failed:`, error);
+            res.status(500).json({ error: error.message || "Failed to send the receipt" });
         }
     });
     // Income stats

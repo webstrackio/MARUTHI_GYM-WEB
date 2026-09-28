@@ -15,9 +15,30 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, Search, History, Banknote, CreditCard, Pencil, Trash2 } from "lucide-react";
+import { TrendingUp, Search, History, Banknote, CreditCard, Pencil, Trash2, MessageCircle, Check, AlertTriangle, Clock } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { formatDate, todayString } from "@shared/dates";
+// Receipt delivery state per payment row. `undefined` means the row predates the
+// WhatsApp columns, which reads as "not attempted" - the same as `pending`.
+const RECEIPT_STATE = {
+  sent: { label: "Receipt sent", icon: Check, className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  failed: { label: "Receipt failed", icon: AlertTriangle, className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+  skipped: { label: "Receipt skipped", icon: AlertTriangle, className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
+  sending: { label: "Sending receipt", icon: Clock, className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  pending: { label: "Receipt not sent", icon: MessageCircle, className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
+};
+function getReceiptState(payment) {
+  return RECEIPT_STATE[payment?.whatsappStatus] ?? RECEIPT_STATE.pending;
+}
+// Tooltip for a delivery the owner can see in a screenshot or a forwarded
+// message. "Sent as image card" answers the question the badge alone cannot:
+// whether the student really got the blue picture or the plain-text fallback.
+function receiptDetail(payment) {
+  if (payment?.whatsappStatus !== "sent" || !payment?.whatsappStyle) return null;
+  return payment.whatsappStyle === "image"
+    ? "Delivered as the blue image card"
+    : "Delivered as plain text - the card could not be attached";
+}
 const editPaymentSchema = z.object({
     date: z.string().min(1, "Date is required"),
     durationMonths: z.number().min(1, "Duration is required"),
@@ -75,6 +96,19 @@ export default function PaymentHistory() {
         onError: (error) => {
             console.error("Delete payment failed:", error);
             toast({ title: error?.message || "Failed to delete payment", variant: "destructive" });
+        },
+    });
+    const resendMutation = useMutation({
+        mutationFn: (id) => apiRequest("POST", `/api/payments/${id}/whatsapp`),
+        onSuccess: (result) => {
+            queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+            toast({ title: "WhatsApp receipt sent", description: result?.to ? `Delivered to +${result.to}` : undefined });
+        },
+        onError: (error) => {
+            // The payment itself is untouched by a failed resend, so this is
+            // reported as its own problem rather than as a payment failure.
+            console.error("Resend receipt failed:", error);
+            toast({ title: error?.message || "Could not send the receipt", description: "The payment is still recorded. Check the WhatsApp settings.", variant: "destructive" });
         },
     });
     const filteredPayments = payments?.filter((payment) => {
@@ -174,6 +208,7 @@ export default function PaymentHistory() {
                     <TableHead>Duration</TableHead>
                     <TableHead>Payment Method</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>WhatsApp Receipt</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -197,6 +232,24 @@ export default function PaymentHistory() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">{formatCurrency(payment.amount)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                            const state = getReceiptState(payment);
+                            const Icon = state.icon;
+                            return (<div className="flex flex-col items-start gap-1">
+                              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${state.className}`} data-testid={`receipt-status-${payment.id}`} title={payment.whatsappError || receiptDetail(payment) || undefined}>
+                                <Icon className="h-3.5 w-3.5"/>
+                                <span>{state.label}</span>
+                              </div>
+                              {payment.whatsappStatus === "sent" && payment.whatsappStyle && (<span className="text-[10px] text-muted-foreground" data-testid={`receipt-style-${payment.id}`}>
+                                {payment.whatsappStyle === "image" ? "Sent as image card" : "Sent as text"}
+                              </span>)}
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => resendMutation.mutate(payment.id)} disabled={resendMutation.isPending} data-testid={`button-resend-receipt-${payment.id}`}>
+                                {resendMutation.isPending && resendMutation.variables === payment.id ? "Sending..." : state.label === "Receipt sent" ? "Resend" : "Send receipt"}
+                              </Button>
+                            </div>);
+                        })()}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(payment)} data-testid={`button-edit-${payment.id}`}>

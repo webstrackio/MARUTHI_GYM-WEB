@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Pencil, Receipt } from "lucide-react";
+import { AlertTriangle, CreditCard, Pencil, Receipt } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -43,6 +43,13 @@ export default function Payments() {
     });
     const { data: payments } = useQuery({
         queryKey: ["/api/payments"],
+    });
+    // Whether automatic WhatsApp receipts can actually be sent. Queried up front
+    // so the owner is warned before recording a payment, rather than finding out
+    // later that nothing was ever delivered.
+    const { data: whatsappStatus } = useQuery({
+        queryKey: ["/api/whatsapp/status"],
+        staleTime: 60_000,
     });
     const form = useForm({
         resolver: zodResolver(formSchema),
@@ -91,8 +98,14 @@ export default function Payments() {
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/students"] });
             queryClient.invalidateQueries({ queryKey: ["/api/income/stats"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/status"] });
             queryClient.invalidateQueries({ predicate: (query) => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/income/daily") });
-            toast({ title: "Payment recorded successfully" });
+            toast({
+                title: "Payment recorded successfully",
+                description: whatsappStatus?.configured
+                    ? "A WhatsApp receipt is being sent to the student."
+                    : "WhatsApp receipts are not configured yet.",
+            });
             setSelectedStudent(null);
             setSearchQuery("");
             setEditedExpiry(null);
@@ -188,6 +201,40 @@ export default function Payments() {
         <h1 className="text-2xl font-semibold text-foreground">Record Payment</h1>
         <p className="text-sm text-muted-foreground mt-1">Process membership fee payments{selectedStudent ? ` — ${normalizeBatch(selectedStudent.batch) === "morning" ? "Morning Batch" : "Evening Batch"}` : ""}</p>
       </div>
+
+      {whatsappStatus?.configured && whatsappStatus.dryRun && (<div className="flex items-start gap-3 rounded-md border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200" data-testid="whatsapp-dry-run-warning">
+        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0"/>
+        <div>
+          <p className="font-medium">WhatsApp dry-run mode</p>
+          <p className="mt-0.5 text-blue-800 dark:text-blue-300">
+            Receipts are logged to the server console instead of being delivered, and are recorded as
+            &ldquo;skipped&rdquo; so nothing is marked sent that was not. Turn off WHATSAPP_DRY_RUN to send
+            for real, then press Resend on any skipped receipt.
+          </p>
+        </div>
+      </div>)}
+      {whatsappStatus?.configured && !whatsappStatus.dryRun && whatsappStatus.receiptStyle === "image" && !whatsappStatus.cardRendering && (<div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200" data-testid="whatsapp-card-render-warning">
+        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0"/>
+        <div>
+          <p className="font-medium">The blue receipt card cannot be drawn on this server</p>
+          <p className="mt-0.5 text-amber-800 dark:text-amber-300">
+            The card image could not be produced, so receipts will be sent as plain text instead. Payments
+            are unaffected and members still get every detail. Ask whoever looks after the website to
+            check the server can draw images and read a font.
+          </p>
+        </div>
+      </div>)}
+      {whatsappStatus?.configured && !whatsappStatus.dryRun && whatsappStatus.receiptStyle === "image" && whatsappStatus.cardRendering && !whatsappStatus.cardUrlConfigured && (<div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200" data-testid="whatsapp-card-url-warning">
+        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0"/>
+        <div>
+          <p className="font-medium">No public address for the receipt card</p>
+          <p className="mt-0.5 text-amber-800 dark:text-amber-300">
+            WhatsApp has to download the card from a public https URL, so without one every receipt falls
+            back to plain text. Set WHATSAPP_PUBLIC_BASE_URL to this site&rsquo;s address, for example
+            https://maruthigym.com
+          </p>
+        </div>
+      </div>)}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>

@@ -94,11 +94,11 @@ function App() {
               <div className="flex h-screen w-full">
                 <AppSidebar />
                 <div className="flex flex-col flex-1 overflow-hidden">
-                  <header className="flex items-center h-14 px-6 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                  <header className="flex items-center h-14 px-3 sm:px-4 md:px-6 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                     <SidebarTrigger data-testid="button-sidebar-toggle"/>
                   </header>
-                  <main className="flex-1 overflow-auto p-6 bg-background">
-                    <div className="max-w-7xl mx-auto">
+                  <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6 bg-background">
+                    <div className="max-w-7xl mx-auto min-w-0">
                       <PageTransition>
                         <Router />
                       </PageTransition>
