@@ -8,22 +8,18 @@ import paymentHandler from "../api/payments/index.js";
 // `vi.mock` calls are hoisted above every top-level statement, so the mocked
 // objects have to be created inside `vi.hoisted` to exist by the time the
 // factory runs.
-const { storageMock, receiptMock } = vi.hoisted(() => {
+const { storageMock } = vi.hoisted(() => {
   const storage = {
     getStudentById: vi.fn(),
     createPayment: vi.fn(),
     updateStudent: vi.fn(),
     getPayments: vi.fn(),
     getPaymentById: vi.fn(),
-    claimPaymentReceipt: vi.fn(),
-    markPaymentReceipt: vi.fn(),
   };
-  const receipt = vi.fn(async () => ({ ok: true, status: "sent", to: "919876543210" }));
-  return { storageMock: storage, receiptMock: receipt };
+  return { storageMock: storage };
 });
 
 vi.mock("../server/lib/storage.js", () => ({ storage: storageMock }));
-vi.mock("../server/lib/whatsapp.js", () => ({ deliverPaymentReceipt: receiptMock }));
 
 const validBody = {
   date: "2026-09-28",
@@ -56,6 +52,8 @@ beforeEach(() => {
   storageMock.getStudentById.mockResolvedValue({ id: 7, name: "R. Vijay Krishna", phone: "9876543210", expiryDate: null });
   storageMock.createPayment.mockResolvedValue({ id: 42, ...validBody });
   storageMock.updateStudent.mockResolvedValue({ id: 7 });
+  // No receipt sender is imported by the route any more, so a real network call
+  // here would mean something is still reaching out after a payment.
   globalThis.fetch = (url) => {
     throw new Error(`Unexpected real network call to ${url}`);
   };
@@ -66,94 +64,151 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("POST /api/payments - WhatsApp trigger", () => {
-  it("sends the receipt once the payment is saved", async () => {
+describe("POST /api/payments", () => {
+  it("saves the payment and returns 201", async () => {
     const res = makeRes();
     await paymentHandler({ method: "POST", body: validBody }, res);
 
     expect(res.statusCode).toBe(201);
     expect(storageMock.createPayment).toHaveBeenCalledOnce();
-    // The send happens after the row exists, and is handed the new id.
-    expect(receiptMock).toHaveBeenCalledWith(42, expect.objectContaining({ storage: storageMock }));
+    expect(res.body.id).toBe(42);
   });
 
-  it("mints a card token on every new payment", async () => {
-    // Without a token the public card URL cannot be built, so the receipt would
-    // silently fall back to text on every single payment.
-    await paymentHandler({ method: "POST", body: validBody }, makeRes());
+  it("makes no network call of any kind after saving", async () => {
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: validBody }, res);
+
+    // globalThis.fetch throws on contact, so a reaching-out would fail the test.
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("persists the payment exactly as validated, with no extra columns", async () => {
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: validBody }, res);
 
     const saved = storageMock.createPayment.mock.calls[0][0];
-    expect(saved.whatsappCardToken).toMatch(/^[0-9a-f-]{36}$/);
+    expect(saved).toEqual({
+      ...validBody,
+      tokenNumber: expect.stringMatching(/^TKN-/),
+      startDate: "2026-09-28",
+      expiryDate: "2026-10-28",
+    });
+    // Nothing receipt-shaped may be written any more.
+    for (const key of Object.keys(saved)) {
+      expect(key.toLowerCase()).not.toContain("whatsapp");
+    }
   });
 
-  it("mints a different token per payment, so one card URL cannot serve two receipts", async () => {
-    await paymentHandler({ method: "POST", body: validBody }, makeRes());
-    await paymentHandler({ method: "POST", body: validBody }, makeRes());
+  it("adds a fixed 30 days per month, not a calendar month", async () => {
+    // 1 month = 30 days, so a 31 Jan payment runs into March rather than
+    // clamping to the end of February.
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: { ...validBody, date: "2026-01-31", duration: 1 } }, res);
 
-    const [first, second] = storageMock.createPayment.mock.calls.map((c) => c[0].whatsappCardToken);
-    expect(first).not.toBe(second);
+    expect(storageMock.createPayment.mock.calls[0][0].expiryDate).toBe("2026-03-02");
   });
 
-  it("ignores a card token supplied by the client", async () => {
-    // The token decides who can read a card. A client that chose its own could
-    // collide with another payment's URL, so it must come from the server only.
-    await paymentHandler(
-      { method: "POST", body: { ...validBody, whatsappCardToken: "attacker-chosen", whatsappStatus: "sent" } },
-      makeRes(),
-    );
+  it("scales multi-month durations off the same 30-day month", async () => {
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: { ...validBody, date: "2026-09-28", duration: 2 } }, res);
+
+    expect(storageMock.createPayment.mock.calls[0][0].expiryDate).toBe("2026-11-27");
+  });
+
+  it("uses 365 days for a full year", async () => {
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: { ...validBody, date: "2026-09-28", duration: 12 } }, res);
+
+    expect(storageMock.createPayment.mock.calls[0][0].expiryDate).toBe("2027-09-28");
+  });
+
+  it("honours a manually entered expiry date over the calculated one", async () => {
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: { ...validBody, expiryDate: "2026-12-31" } }, res);
+
+    expect(storageMock.createPayment.mock.calls[0][0].expiryDate).toBe("2026-12-31");
+  });
+
+  it("ignores an impossible manual expiry date and calculates one instead", async () => {
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: { ...validBody, expiryDate: "2026-02-30" } }, res);
+
+    expect(storageMock.createPayment.mock.calls[0][0].expiryDate).toBe("2026-10-28");
+  });
+
+  it("extends from the later of the current expiry and the payment date", async () => {
+    storageMock.getStudentById.mockResolvedValue({ id: 7, name: "R. Vijay Krishna", phone: "9876543210", expiryDate: "2026-11-30" });
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: { ...validBody, date: "2026-09-28", duration: 1 } }, res);
 
     const saved = storageMock.createPayment.mock.calls[0][0];
-    expect(saved.whatsappCardToken).not.toBe("attacker-chosen");
-    expect(saved.whatsappStatus).toBeUndefined();
+    // 30 Nov is in the future, so that is the base and 1 month runs to 30 Dec.
+    expect(saved.expiryDate).toBe("2026-12-30");
+  });
+
+  it("updates the student's expiry date to match the payment", async () => {
+    const res = makeRes();
+    await paymentHandler({ method: "POST", body: validBody }, res);
+
+    expect(storageMock.updateStudent).toHaveBeenCalledWith(7, { expiryDate: "2026-10-28" });
   });
 
   it("sends nothing when the student does not exist", async () => {
-    storageMock.getStudentById.mockResolvedValue(undefined);
+    storageMock.getStudentById.mockResolvedValue(null);
     const res = makeRes();
-
     await paymentHandler({ method: "POST", body: validBody }, res);
 
     expect(res.statusCode).toBe(404);
     expect(storageMock.createPayment).not.toHaveBeenCalled();
-    expect(receiptMock).not.toHaveBeenCalled();
   });
 
   it("sends nothing when validation fails", async () => {
     const res = makeRes();
-    await paymentHandler({ method: "POST", body: { ...validBody, amount: undefined } }, res);
+    await paymentHandler({ method: "POST", body: { ...validBody, studentName: undefined } }, res);
 
     expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe("Invalid payment data");
     expect(storageMock.createPayment).not.toHaveBeenCalled();
-    expect(receiptMock).not.toHaveBeenCalled();
   });
 
-  it("sends nothing when the duration is out of range", async () => {
-    const res = makeRes();
-    await paymentHandler({ method: "POST", body: { ...validBody, duration: 0 } }, res);
-
-    expect(res.statusCode).toBe(400);
-    expect(receiptMock).not.toHaveBeenCalled();
+  it("rejects a duration outside 1-120 months", async () => {
+    for (const duration of [0, 121, 1.5]) {
+      const res = makeRes();
+      await paymentHandler({ method: "POST", body: { ...validBody, duration } }, res);
+      expect(res.statusCode).toBe(400);
+    }
+    expect(storageMock.createPayment).not.toHaveBeenCalled();
   });
 
-  it("still returns 201 and saves the payment when the send throws", async () => {
-    receiptMock.mockRejectedValueOnce(new Error("Meta exploded"));
+  it("rejects an unsupported method without saving anything", async () => {
     const res = makeRes();
+    await paymentHandler({ method: "DELETE", body: validBody }, res);
 
-    await paymentHandler({ method: "POST", body: validBody }, res);
-
-    // The payment succeeded; only the receipt failed. The owner must not see
-    // this as a payment failure.
-    expect(res.statusCode).toBe(201);
-    expect(storageMock.createPayment).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(405);
+    expect(storageMock.createPayment).not.toHaveBeenCalled();
   });
+});
 
-  it("sends nothing for a GET", async () => {
-    storageMock.getPayments.mockResolvedValue([]);
+describe("GET /api/payments", () => {
+  it("returns the stored payments and saves nothing", async () => {
+    storageMock.getPayments.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     const res = makeRes();
-
     await paymentHandler({ method: "GET" }, res);
 
-    expect(res.body).toEqual([]);
-    expect(receiptMock).not.toHaveBeenCalled();
+    // The GET branch answers with a bare res.json(), so no explicit status is
+    // set and the platform applies the 200 default.
+    expect(res.statusCode).toBeNull();
+    expect(res.body).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(storageMock.createPayment).not.toHaveBeenCalled();
+    expect(storageMock.updateStudent).not.toHaveBeenCalled();
+  });
+
+  it("reports a failure instead of leaking the error", async () => {
+    storageMock.getPayments.mockRejectedValue(new Error("db down"));
+    const res = makeRes();
+    await paymentHandler({ method: "GET" }, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe("Failed to fetch payments");
   });
 });

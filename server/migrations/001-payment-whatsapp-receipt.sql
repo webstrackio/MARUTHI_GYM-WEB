@@ -1,3 +1,23 @@
+-- =============================================================================
+-- DEPRECATED - RETAINED FOR HISTORY ONLY. DO NOT RUN ON A NEW DATABASE.
+-- =============================================================================
+-- The automatic WhatsApp payment-receipt feature was removed on purpose. The
+-- manual WhatsApp buttons (wa.me / browser deep links) are unrelated and stay.
+--
+-- This script was ALREADY APPLIED to the live database, so the six columns below
+-- still exist there in an inert state: no application code reads or writes them
+-- (they are absent from shared/schema.js). They are intentionally NOT dropped,
+-- because dropping columns is destructive and irreversible.
+--
+-- Do not re-run this on a fresh database: nothing consumes the columns, and the
+-- trailing SELECT is the only statement here that produces output.
+--
+-- A drop, if ever wanted, must be written as a NEW, separately reviewed script
+-- and run deliberately - never by editing or re-applying this one.
+-- =============================================================================
+--
+-- Original header, kept verbatim below for the historical record.
+--
 -- WhatsApp payment receipts: per-payment delivery tracking.
 --
 -- Run once against the live database. Every statement is IF NOT EXISTS, so the

@@ -53,53 +53,15 @@ export const payments = pgTable("payments", {
     studentId: integer("student_id").notNull(),
     registerNo: varchar("register_no", { length: 50 }).notNull(),
     studentName: text("student_name").notNull(),
-    duration: integer("duration").notNull(), // in calendar months
+    duration: integer("duration").notNull(), // in months, charged as fixed 30-day months (see shared/dates.js)
     amount: integer("amount").notNull(), // in rupees
     paymentMethod: varchar("payment_method", { length: 20 }).notNull(), // 'cash' or 'online'
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    // WhatsApp receipt delivery state. `pending` means "not attempted yet";
-    // `sending` is a short-lived in-flight claim that makes a duplicate send
-    // impossible; `sent` is terminal and blocks further automatic sends;
-    // `failed` and `skipped` stay retryable via the manual resend button.
-    whatsappStatus: varchar("whatsapp_status", { length: 20 }).notNull().default("pending"),
-    whatsappMessageId: varchar("whatsapp_message_id", { length: 160 }),
-    whatsappSentAt: timestamp("whatsapp_sent_at", { withTimezone: true }),
-    whatsappError: text("whatsapp_error"),
-    // Which presentation was actually delivered: "image" when the blue card went
-    // out as a template header, "text" when it fell back to the text-only body.
-    // Recorded so support can tell a customer what they really received.
-    whatsappStyle: varchar("whatsapp_style", { length: 10 }),
-    // Unguessable path segment for the public card URL that WhatsApp fetches.
-    // A sequential payment id would make student names and amounts readable by
-    // anyone who guessed a number, so the URL is keyed on this instead.
-    whatsappCardToken: varchar("whatsapp_card_token", { length: 64 }),
 });
-// The receipt columns are omitted on purpose: they are written exclusively by the
-// server, never by the request body. A client cannot mark its own receipt as
-// `sent`, cannot forge the card URL, and cannot choose the presented style.
 export const insertPaymentSchema = createInsertSchema(payments).omit({
     id: true,
     createdAt: true,
-    whatsappStatus: true,
-    whatsappMessageId: true,
-    whatsappSentAt: true,
-    whatsappError: true,
-    whatsappStyle: true,
-    whatsappCardToken: true,
 });
-// The full set of values `whatsapp_status` can hold, and the subset an
-// automatic send may claim.
-//
-// `sending` and `sent` are excluded on purpose: an in-flight send and a
-// completed one must both block a second automatic attempt. `failed` and
-// `skipped` are included so a transient problem is retried on the next trigger
-// rather than needing the owner to press Resend. Both storage layers import
-// RETRYABLE_RECEIPT_STATUSES for the claim's WHERE clause, so the allowlist
-// cannot drift between them.
-export const WHATSAPP_RECEIPT_STATUSES = ["pending", "sending", "sent", "failed", "skipped"];
-export const RETRYABLE_RECEIPT_STATUSES = WHATSAPP_RECEIPT_STATUSES.filter(
-    (status) => status !== "sending" && status !== "sent",
-);
 // Attendance table
 export const attendance = pgTable("attendance", {
     id: serial("id").primaryKey(),

@@ -18,7 +18,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertStudentSchema, normalizeBatch, normalizePhone } from "@shared/schema";
 import { daysUntil, formatDate, formatTimeIST, parseDateString, todayString } from "@shared/dates";
-import { buildWhatsAppShareLink, openExternalUrl } from "@/lib/whatsapp";
+import { buildWhatsAppHomeLink, openExternalUrl } from "@/lib/whatsapp";
 import { useToday } from "@/hooks/use-today";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -43,19 +43,11 @@ function downloadBlob(blob, filename) {
 function openWhatsAppWeb() {
     openExternalUrl("https://web.whatsapp.com/");
 }
-// Plain-text version of the check-in card shown in the popup. The values are
-// read straight from the already-stored feedback data, so a repeated check-in
-// replays the exact same details the popup shows and never invents a new
-// check-in date or time.
-function buildCheckInMessage(data) {
-    return [
-        "Maruthi Gym",
-        ...buildCheckInRows(data).map((row) => `${row.label}: ${row.value}`),
-    ].join("\n");
-}
-// The six card fields, built once so the popup, the shareable card image and
-// the share text can never drift apart. Each row is null when the popup would
-// not render it (missing date, missing time, ...).
+// The six card fields, built once so the popup and the shareable card image can
+// never drift apart. Each row is null when the popup would not render it
+// (missing date, missing time, ...). There is deliberately no plain-text
+// equivalent any more: WhatsApp receives the card image alone, so a second
+// "Maruthi Gym / Name: ... / Status: ..." text message is never built.
 function buildCheckInRows(data) {
     return [
         data.name ? { label: "Name", value: data.name, tone: "default" } : null,
@@ -311,18 +303,15 @@ export default function Students() {
             toast({ title: "Card image downloaded", description: "Attach the downloaded card image into the open WhatsApp Web chat" });
         }
     };
-    // WhatsApp sharing for the "Already Checked In" popup. The member's number
-    // is never attached, so WhatsApp always shows its own contact/group picker.
-    // The card image is generated from the same data the popup renders, and
-    // carries every field, because browsers ignore the `text` member whenever
-    // `files` is passed to the Web Share API - the image is what guarantees the
-    // information survives the share.
+    // WhatsApp sharing for the "Already Checked In" popup. The card image is the
+    // one and only thing that is ever handed to WhatsApp: it is rasterized from
+    // the same DOM the popup renders, so it already carries the "Already Checked
+    // In" banner plus every field. Nothing else is attached - no `text` member
+    // on the share and no pre-filled deep link - because WhatsApp delivers an
+    // image plus text as two separate messages, which showed the gym owner the
+    // same details twice. The member's number is never attached either, so
+    // WhatsApp still opens its own contact/group picker.
     const handleShareAlreadyCheckedIn = async () => {
-        const data = attendanceFeedback?.data;
-        if (!data) {
-            return;
-        }
-        const message = buildCheckInMessage(data);
         let blob = null;
         try {
             blob = await generateCheckInCardImage();
@@ -330,15 +319,18 @@ export default function Students() {
         catch (_err) {
             blob = null;
         }
+        // A failed rasterization sends nothing at all. There is deliberately no
+        // plain-text fallback here: it would either duplicate a card that was
+        // already sent, or silently reach WhatsApp as a text-only message
+        // dressed up as the card. Retry instead.
         if (!blob) {
-            openExternalUrl(buildWhatsAppShareLink(message));
-            toast({ title: "Unable to generate the check-in card", description: "Opened WhatsApp with the check-in details as text." });
+            toast({ title: "Unable to generate the check-in card", description: "Nothing was sent to WhatsApp. Please try again.", variant: "destructive" });
             return;
         }
         const file = new File([blob], "maruthi-gym-check-in.png", { type: "image/png" });
         if (typeof navigator.share === "function" && navigator.canShare && navigator.canShare({ files: [file] })) {
             try {
-                await navigator.share({ files: [file], text: message });
+                await navigator.share({ files: [file], title: "Maruthi Gym" });
                 return;
             }
             catch (err) {
@@ -347,8 +339,8 @@ export default function Students() {
             }
         }
         // No file sharing available (desktop browsers mostly): hand the card
-        // over on the clipboard and open WhatsApp's recipient picker with the
-        // text, so the details can still be pasted into any chat or group.
+        // over on the clipboard and open WhatsApp empty, so the owner only ever
+        // pastes the single card image into the chat they pick.
         let copied = false;
         if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
             try {
@@ -359,7 +351,7 @@ export default function Students() {
                 copied = false;
             }
         }
-        openExternalUrl(buildWhatsAppShareLink(message));
+        openExternalUrl(buildWhatsAppHomeLink());
         if (copied) {
             toast({ title: "Card image copied", description: "Pick a chat in WhatsApp and paste the card image" });
         }

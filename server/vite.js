@@ -49,6 +49,12 @@ export async function setupVite(app, server) {
             next(e);
         }
     });
+    // Vite runs in `middlewareMode` and its HMR socket is the caller's HTTP
+    // server, so it never binds a port of its own - there is exactly one
+    // listener. The instance is returned so the caller can close its file
+    // watchers on shutdown; without that the dev process lingers after the
+    // port is released.
+    return vite;
 }
 export function serveStatic(app) {
     const distPath = path.resolve(import.meta.dirname, "public");

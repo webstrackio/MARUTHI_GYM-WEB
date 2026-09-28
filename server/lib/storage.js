@@ -1,8 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { eq, and, inArray, isNull, sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
-import { students, payments, attendance, normalizeBatch, normalizePhone, RETRYABLE_RECEIPT_STATUSES } from "../../shared/schema.js";
+import { eq, sql } from "drizzle-orm";
+import { students, payments, attendance, normalizeBatch, normalizePhone } from "../../shared/schema.js";
 import { addDays, calcExpiryDate, todayString } from "../../shared/dates.js";
 
 const client = postgres(process.env.DATABASE_URL, {
@@ -57,32 +56,6 @@ export class DrizzleStorage {
     const result = await db.select().from(payments).where(eq(payments.id, id));
     return result[0];
   }
-  // Looks a payment up by the unguessable token embedded in its public card URL.
-  // WhatsApp fetches that URL itself, so this is the only way the image endpoint
-  // can find the payment.
-  async getPaymentByCardToken(token) {
-    if (!token) return undefined;
-    const result = await db.select().from(payments).where(eq(payments.whatsappCardToken, token));
-    return result[0];
-  }
-  // Returns the payment's card token, minting one if the row predates the
-  // column. Without this, a payment recorded before the visual card existed
-  // could only ever get the text receipt - the owner would have to patch the
-  // database by hand to give an old member a real card.
-  async ensurePaymentCardToken(id) {
-    const existing = await this.getPaymentById(id);
-    if (!existing) return null;
-    if (existing.whatsappCardToken) return existing.whatsappCardToken;
-    const token = randomUUID();
-    const updated = await db
-      .update(payments)
-      .set({ whatsappCardToken: token })
-      .where(and(eq(payments.id, id), isNull(payments.whatsappCardToken)))
-      .returning();
-    // If another resend won the race, its token is the one that is already
-    // indexed, so reuse theirs rather than orphaning a second URL.
-    return updated?.[0]?.whatsappCardToken ?? token;
-  }
   async getLatestPaymentByStudentId(studentId) {
     const result = await db
       .select()
@@ -102,45 +75,6 @@ export class DrizzleStorage {
   }
   async deletePayment(id) {
     await db.delete(payments).where(eq(payments.id, id));
-  }
-  // Atomically moves a payment's receipt into the in-flight "sending" state and
-  // returns the row, or returns null when another request already has it.
-  //
-  // The guard is an explicit allowlist (RETRYABLE_RECEIPT_STATUSES) rather than
-  // "status <> sent", because Postgres re-evaluates a WHERE clause against the
-  // committed row version after it releases the row lock. A "<> sent" test
-  // would still match the freshly written "sending" row and let a second
-  // concurrent request through, so two receipts could be sent. With the
-  // allowlist, "sending" and "sent" both fail the test and the second request
-  // gets 0 rows back and sends nothing.
-  //
-  // `force` is for the owner's explicit resend button. It deliberately ignores
-  // the allowlist so a row stuck in "sending" by a crashed process can always
-  // be recovered by hand.
-  async claimPaymentReceipt(id, { force = false } = {}) {
-    const conditions = force
-      ? [eq(payments.id, id)]
-      : [eq(payments.id, id), inArray(payments.whatsappStatus, RETRYABLE_RECEIPT_STATUSES)];
-    const result = await db
-      .update(payments)
-      .set({ whatsappStatus: "sending", whatsappError: null })
-      .where(and(...conditions))
-      .returning();
-    return result[0] ?? null;
-  }
-  // Records the terminal outcome of a receipt attempt.
-  async markPaymentReceipt(id, { status, messageId = null, error = null, style = null }) {
-    const patch = {
-      whatsappStatus: status,
-      whatsappMessageId: messageId,
-      whatsappError: error,
-      whatsappStyle: style,
-    };
-    if (status === "sent") {
-      patch.whatsappSentAt = new Date();
-    }
-    const result = await db.update(payments).set(patch).where(eq(payments.id, id)).returning();
-    return result[0] ?? null;
   }
   // Recomputes a student's expiry date by replaying all of their payments in
   // chronological order. Used after a payment is edited or deleted so the

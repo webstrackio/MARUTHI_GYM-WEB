@@ -12,8 +12,10 @@ export default defineConfig({
     // through the browser, not jsdom, so nothing here needs a DOM environment.
     include: ["tests/**/*.test.js"],
     environment: "node",
-    // The Cloud API is replaced by an injected fetch, so no test may reach the
-    // network. Failing loudly on a stray request is the whole point.
+    // No test may reach the network. The payment route used to fan out to the
+    // WhatsApp Cloud API on every saved payment, but that sender has been
+    // removed, so the route now only touches the mocked storage layer and there
+    // is no longer a client left that could dial out.
     globals: false,
   },
 });

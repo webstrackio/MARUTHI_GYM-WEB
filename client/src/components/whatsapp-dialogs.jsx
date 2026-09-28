@@ -8,13 +8,19 @@ const BULK_SEPARATOR_NOTE = "Each message is separated by a divider so it can be
 // Pill picker, styled like the batch selector in the Students page: the active
 // option is inverted so the current choice is readable at a glance.
 function MessageTypePicker({ types, value, onChange, testIdPrefix }) {
-    return (<div className="flex flex-wrap gap-1 rounded-full border bg-muted p-1" data-testid={`${testIdPrefix}-message-types`}>
+    return (<div className="flex w-full max-w-full box-border flex-wrap gap-1 rounded-full border bg-muted p-1 max-[480px]:grid max-[480px]:grid-cols-1 max-[480px]:gap-1.5" data-testid={`${testIdPrefix}-message-types`}>
         {types.map((template) => (<button
             key={template.id}
             type="button"
             onClick={() => onChange(template.id)}
             aria-pressed={value === template.id}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-150 active:scale-95 ${value === template.id
+            // Mobile (<=480px) becomes a single-column grid so every pill lines up
+            // on one edge instead of leaving a ragged right gap: the widest label
+            // is ~196px inside a ~238px box, so content-sized pills leave ~40px of
+            // dead space on every row. `min-w-0 max-w-full` keeps each pill inside
+            // the box even if a future label is longer than the container.
+            // The selected white pill styling is deliberately unchanged.
+            className={`inline-flex min-w-0 max-w-full items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium break-words transition-all duration-150 active:scale-95 max-[480px]:w-full ${value === template.id
                 ? "bg-foreground text-background shadow-sm"
                 : "text-muted-foreground hover:text-foreground"}`}
             data-testid={`${testIdPrefix}-message-type-${template.id}`}
